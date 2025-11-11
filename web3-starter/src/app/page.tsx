@@ -1,69 +1,205 @@
-'use client';
+/**
+ * HomePage - Página principal del sistema de trazabilidad
+ *
+ * Responsabilidades:
+ * - Gestionar el flujo completo de registro de usuarios (conexión → selección de rol → solicitud)
+ * - Controlar estados de solicitud (unregistered, pending, approved, rejected, canceled)
+ * - Proporcionar interfaz para selección de roles (Producer, Factory, Retailer, Consumer, Admin)
+ * - Manejar cancelación y reinicio de solicitudes
+ * - Redirigir automáticamente a dashboard cuando usuario está aprobado
+ * - Persistir solicitudes en localStorage para que admin las gestione
+ */
+
+"use client";
+import React from 'react';
+import { AlertCircle, Ban, Clock } from 'lucide-react';
 import { useWallet } from '@/hooks/useWallet';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 
-export default function HomePage() {
-  const { account, status, role, connect, disconnect, setRole, setStatus, connecting, error } = useWallet();
+// Opciones disponibles de roles en el sistema
+const ROLE_OPTIONS = [
+  { value: '', label: '— Selecciona —' },
+  { value: 'PRODUCER', label: 'Producer' },
+  { value: 'FACTORY', label: 'Factory' },
+  { value: 'RETAILER', label: 'Retailer' },
+  { value: 'CONSUMER', label: 'Consumer' },
+  { value: 'ADMIN', label: 'Admin' },
+];
 
-  const uiState =
-    !account ? 'not-connected'
-    : status === 'unregistered' ? 'connected-unregistered'
-    : status === 'pending' ? 'connected-pending'
-    : 'connected-approved';
+/**
+ * Componente principal de la página de inicio
+ * Maneja todo el flujo de registro y autenticación de usuarios
+ */
+export default function HomePage() {
+  // Estado global de la wallet y funciones de control
+  const { account, status, role, setRole, setStatus, connect } = useWallet();
+
+  // Determinar el estado de la interfaz de usuario basado en conexión y estado de registro
+  const uiState = !account
+    ? 'not-connected'
+    : status === 'unregistered'
+    ? 'connected-unregistered'
+    : status === 'pending'
+    ? 'connected-pending'
+    : status === 'approved'
+    ? 'connected-approved'
+    : status === 'rejected'
+    ? 'connected-rejected'
+    : 'connected-canceled';
+
+  // Redirección automática al dashboard si está aprobado
+  React.useEffect(() => {
+    if (uiState === 'connected-approved') {
+      window.location.href = '/dashboard';
+    }
+  }, [uiState]);
 
   return (
-    <div className="space-y-4">
-      <Card title="Estado de sesión">
-        <p className="text-sm">Cuenta: {account ? `${account.slice(0,6)}…${account.slice(-4)}` : '—'}</p>
-        <p className="text-sm">Registro: {status}</p>
-        <div className="flex gap-2 mt-3">
-          {!account ? (
-            <Button onClick={connect} disabled={connecting}>{connecting ? 'Conectando…' : 'Conectar MetaMask'}</Button>
-          ) : (
-            <Button variant="secondary" onClick={disconnect}>Desconectar</Button>
-          )}
-        </div>
-        {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
-      </Card>
-
-      {uiState === 'not-connected' && (
-        <Card title="No conectado">
-          <p className="text-sm">Haz clic en “Conectar MetaMask”. Verifica la red <b>Anvil Local (31337)</b>.</p>
-        </Card>
-      )}
-
-      {uiState === 'connected-unregistered' && (
-        <Card title="Registro de rol">
-          <div className="space-y-3">
+    <section className="space-y-8">
+      {/* Estado: Usuario no conectado - mostrar selector de rol */}
+      {(uiState === 'not-connected' || uiState === 'connected-unregistered') && (
+        <Card title={uiState === 'not-connected' ? "Selecciona tu rol" : "Solicitud de Rol"} subtitle={uiState === 'not-connected' ? "Para comenzar" : "Esperando envío"} contentClassName="space-y-5">
+          <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <Label htmlFor="role">Rol</Label>
-              <Select id="role" value={role} onChange={(e) => setRole(e.target.value)}>
-                <option value="">— Selecciona —</option>
-                <option value="CONSUMER">Consumer</option>
-                <option value="DATA_PROVIDER">Data Provider</option>
-                <option value="ADMIN">Admin</option>
+              <Label htmlFor="role">Selecciona rol</Label>
+              <Select
+                id="role"
+                value={role}
+                onChange={(event) => setRole(event.target.value)}
+                disabled={!account}
+              >
+                {ROLE_OPTIONS.map((option) => (
+                  <option key={option.value || 'placeholder'} value={option.value}>
+                    {option.label || 'Selecciona'}
+                  </option>
+                ))}
               </Select>
             </div>
-            <Button onClick={() => setStatus('pending')} disabled={!role}>Enviar registro</Button>
+            {/* Lista de verificación informativa para el usuario */}
+            <div className="rounded-md border border-gray-200 bg-white p-4 text-xs text-gray-600">
+              <p className="font-mono uppercase tracking-[0.28em] text-gray-400">Lista de verificación</p>
+              <ul className="mt-2 space-y-1 font-mono text-[0.6rem] uppercase tracking-[0.25em] text-gray-600">
+                <li>• Usa cuenta asignada al rol</li>
+                <li>• Verifica red 31337</li>
+                <li>• Confirma datos antes de enviar</li>
+              </ul>
+            </div>
           </div>
+          {/* Botón principal: conectar wallet o enviar solicitud */}
+          <Button variant="ghost" onClick={async () => {
+            if (!account) {
+              await connect();
+            }
+
+            // Guardar solicitud en localStorage para que el admin la vea
+            if (account && role) {
+              const existingRequests = localStorage.getItem('pendingUserRequests');
+              const requests = existingRequests ? JSON.parse(existingRequests) : [];
+
+              // Verificar si ya existe una solicitud de esta cuenta
+              const existingIndex = requests.findIndex((r: { address: string }) => r.address === account);
+
+              const newRequest = {
+                id: account,
+                address: account,
+                role: role,
+                status: 'pending' as const,
+              };
+
+              if (existingIndex >= 0) {
+                // Actualizar solicitud existente
+                requests[existingIndex] = newRequest;
+              } else {
+                // Agregar nueva solicitud
+                requests.push(newRequest);
+              }
+
+              localStorage.setItem('pendingUserRequests', JSON.stringify(requests));
+            }
+
+            setStatus('pending');
+          }} disabled={!role} className="justify-center">
+            {uiState === 'not-connected' ? 'Conectar y solicitar' : 'Emitir solicitud'}
+          </Button>
         </Card>
       )}
 
+      {/* Estado: Solicitud pendiente de aprobación */}
       {uiState === 'connected-pending' && (
-        <Card title="Pendiente de aprobación">
-          <p className="text-sm">Tu registro está pendiente. (Demo) Haz clic para simular aprobación.</p>
-          <Button onClick={() => setStatus('approved')}>Simular aprobación</Button>
+        <Card title="Cola de Validación" subtitle="Esperando aprobación">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-500">
+              <Clock className="h-4 w-4 animate-pulse" />
+            </span>
+            <p className="text-xs text-gray-600">
+              Hemos recibido tu solicitud. Cuando el administrador confirme el rol podrás acceder al panel completo.
+            </p>
+          </div>
+          {/* Botón para cancelar la solicitud pendiente */}
+          <Button
+            onClick={() => {
+              // Cambiar el estado de la solicitud a "canceled" en localStorage
+              if (account) {
+                const existingRequests = localStorage.getItem('pendingUserRequests');
+                if (existingRequests) {
+                  const requests = JSON.parse(existingRequests);
+                  const updatedRequests = requests.map((r: { address: string; role: string; status: string }) =>
+                    r.address.toLowerCase() === account.toLowerCase()
+                      ? { ...r, status: 'canceled' }
+                      : r
+                  );
+                  localStorage.setItem('pendingUserRequests', JSON.stringify(updatedRequests));
+                }
+              }
+              setRole('');
+              setStatus('canceled');
+            }}
+            className="mt-4 w-full justify-center"
+            variant="secondary"
+          >
+            Cancelar solicitud
+          </Button>
         </Card>
       )}
 
-      {uiState === 'connected-approved' && (
-        <Card title="Bienvenida">
-          <p>Ahora puedes ir al <a className="underline" href="/dashboard">dashboard</a>.</p>
+      {/* Estado: Solicitud rechazada por el admin */}
+      {uiState === 'connected-rejected' && (
+        <Card title="Solicitud rechazada" subtitle="Acción requerida">
+          <div className="flex items-start gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-500">
+              <AlertCircle className="h-4 w-4" />
+            </span>
+            <p className="text-xs leading-relaxed text-gray-500">
+              El administrador rechazó tu solicitud. Revisa tu información, ajusta los datos necesarios y vuelve a enviar el registro.
+            </p>
+          </div>
+          {/* Botón para reiniciar el proceso de registro */}
+          <Button variant="secondary" onClick={() => setStatus('unregistered')} className="mt-4 w-full justify-center">
+            Reiniciar registro
+          </Button>
         </Card>
       )}
-    </div>
+
+      {/* Estado: Solicitud cancelada por el usuario */}
+      {uiState === 'connected-canceled' && (
+        <Card title="Registro cancelado" subtitle="Reanuda cuando quieras">
+          <div className="flex items-start gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-500">
+              <Ban className="h-4 w-4" />
+            </span>
+            <p className="text-xs leading-relaxed text-gray-600">
+              Cancelaste la solicitud anterior. Puedes generar una nueva en cualquier momento para regresar al flujo de aprobación.
+            </p>
+          </div>
+          {/* Botón para crear una nueva solicitud */}
+          <Button variant="secondary" onClick={() => setStatus('unregistered')} className="mt-4 w-full justify-center">
+            Crear nueva solicitud
+          </Button>
+        </Card>
+      )}
+    </section>
   );
 }
