@@ -64,7 +64,7 @@ export default function Header() {
         </div>
 
         {/* Sección central: botones de navegación */}
-        <nav className="flex flex-wrap items-center gap-3 flex-1 justify-end mx-4">
+        <nav className="flex flex-wrap items-center gap-3 flex-1 justify-start mx-4">
           {items
             .filter((item) => item.visible)
             .map(({ href, label, icon: Icon }) => (

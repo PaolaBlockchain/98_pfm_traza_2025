@@ -33,29 +33,24 @@ export const Web3Service = {
 
   async connectWallet(): Promise<string> {
     const eth = getEthereum();
-    if (!eth) throw new Error('MetaMask no encontrado');
+    if (!eth) throw new Error('MetaMask no encontrado. Por favor instala MetaMask para continuar.');
     
     const ok = await this.ensureChain();
     if (!ok) throw new Error('Agrega o cambia a Anvil Local (31337) en MetaMask');
 
-    try {
-      await eth.request({
-        method: 'wallet_revokePermissions',
-        params: [{ eth_accounts: {} }],
-      });
-    } catch {
-      // Ignorar si falla o no está soportado
-    }
-
+    // Solicitar permisos explícitamente para forzar a MetaMask a abrir el selector de cuentas
     try {
       await eth.request({
         method: 'wallet_requestPermissions',
         params: [{ eth_accounts: {} }],
       });
-    } catch {
-      // Usar fallback si falla
+    } catch (error) {
+      // Si el usuario cancela, lanzar error
+      console.error('Error al solicitar permisos:', error);
+      throw new Error('Conexión cancelada por el usuario');
     }
 
+    // Ahora solicitar las cuentas - esto debería usar los permisos recién otorgados
     const accounts = (await eth.request({ method: 'eth_requestAccounts' })) as string[];
     if (!accounts?.length) throw new Error('No se recibieron cuentas');
     return accounts[0];

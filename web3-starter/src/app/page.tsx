@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { ContractService } from '@/lib/contractService';
 
 // Opciones disponibles de roles en el sistema
 const ROLE_OPTIONS = [
@@ -28,6 +29,14 @@ const ROLE_OPTIONS = [
   { value: 'CONSUMER', label: 'Consumer' },
   { value: 'ADMIN', label: 'Admin' },
 ];
+
+// Mapeo de roles a IDs del contrato (según enum Roles en Solidity)
+const ROLE_TO_ID: Record<string, number> = {
+  PRODUCER: 1,
+  FACTORY: 2,
+  RETAILER: 3,
+  CONSUMER: 4,
+};
 
 /**
  * Componente principal de la página de inicio
@@ -92,35 +101,47 @@ export default function HomePage() {
           <Button variant="ghost" onClick={async () => {
             if (!account) {
               await connect();
+              return;
             }
 
-            // Guardar solicitud en localStorage para que el admin la vea
+            // Enviar transacción al blockchain si está conectado y tiene rol seleccionado
             if (account && role) {
-              const existingRequests = localStorage.getItem('pendingUserRequests');
-              const requests = existingRequests ? JSON.parse(existingRequests) : [];
+              try {
+                // No permitir solicitar rol de Admin desde el frontend
+                if (role === 'ADMIN') {
+                  alert('El rol de Admin no puede ser solicitado. Solo puede ser asignado por el admin actual.');
+                  return;
+                }
 
-              // Verificar si ya existe una solicitud de esta cuenta
-              const existingIndex = requests.findIndex((r: { address: string }) => r.address === account);
+                // Obtener el ID del rol según el mapeo
+                const roleId = ROLE_TO_ID[role];
+                if (roleId === undefined) {
+                  alert('Rol inválido seleccionado');
+                  return;
+                }
 
-              const newRequest = {
-                id: account,
-                address: account,
-                role: role,
-                status: 'pending' as const,
-              };
+                // Crear instancia del servicio de contrato
+                const contractService = new ContractService();
 
-              if (existingIndex >= 0) {
-                // Actualizar solicitud existente
-                requests[existingIndex] = newRequest;
-              } else {
-                // Agregar nueva solicitud
-                requests.push(newRequest);
+                // Llamar a la función del contrato para solicitar el rol
+                const receipt = await contractService.requestUserRole(roleId);
+
+                console.log('Usuario registrado en blockchain:', receipt);
+
+                // Actualizar estado local después de transacción exitosa
+                setStatus('pending');
+
+              } catch (error: unknown) {
+                console.error('Error al registrar usuario:', error);
+                
+                // Mostrar mensaje de error al usuario
+                if (error instanceof Error) {
+                  alert(`Error al registrar: ${error.message}`);
+                } else {
+                  alert('Error desconocido al registrar usuario');
+                }
               }
-
-              localStorage.setItem('pendingUserRequests', JSON.stringify(requests));
             }
-
-            setStatus('pending');
           }} disabled={!role} className="justify-center">
             {uiState === 'not-connected' ? 'Conectar y solicitar' : 'Emitir solicitud'}
           </Button>

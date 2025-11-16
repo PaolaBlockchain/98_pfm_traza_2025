@@ -1,3 +1,5 @@
+import SupplyChainABI from './SupplyChain.json';
+
 export const NETWORK_CONFIG = {
   chainId: 31337,
   chainIdHex: '0x7a69',
@@ -7,7 +9,8 @@ export const NETWORK_CONFIG = {
 };
 
 export const CONTRACT_CONFIG = {
-  address: '0x0000000000000000000000000000000000000000',
-  abi: [] as const,
-  adminAddress: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+  // Dirección del contrato desplegado en Anvil
+  address: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  abi: SupplyChainABI as any, // Cast necesario para compatibilidad con ethers.js
 };

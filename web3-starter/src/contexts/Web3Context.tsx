@@ -1,7 +1,8 @@
 'use client';
 import React, { createContext, useCallback, useEffect, useMemo, useState } from 'react';
 import { Web3Service } from '@/lib/web3';
-import { NETWORK_CONFIG, CONTRACT_CONFIG } from '@/contracts/config';
+import { NETWORK_CONFIG } from '@/contracts/config';
+import { ContractService } from '@/lib/contractService';
 
 export type RegistrationStatus = 'unregistered' | 'pending' | 'approved' | 'rejected' | 'canceled';
 
@@ -83,41 +84,51 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
       setError(null);
       setConnecting(true);
       const wallet = await Web3Service.connectWallet();
+      console.log('🔍 Cuenta conectada desde MetaMask:', wallet);
       setAccount(wallet);
-      if (wallet && wallet.toLowerCase() === CONTRACT_CONFIG.adminAddress.toLowerCase()) {
-        setRole('admin');
-        setStatus('approved');
-      } else {
-        // Verificar si existe una solicitud pendiente en localStorage
-        if (typeof window !== 'undefined') {
-          const pendingRequests = localStorage.getItem('pendingUserRequests');
-          if (pendingRequests) {
-            try {
-              const requests = JSON.parse(pendingRequests);
-              const userRequest = requests.find((r: { address: string; role: string; status: RegistrationStatus }) => r.address.toLowerCase() === wallet.toLowerCase());
-              if (userRequest) {
-                // Si el estado es canceled, no restaurar el rol
-                if (userRequest.status === 'canceled') {
-                  setRole('');
-                  setStatus('unregistered');
-                } else {
-                  setRole(userRequest.role);
-                  setStatus(userRequest.status);
-                }
-              } else {
-                setRole('');
-                setStatus('unregistered');
-              }
-            } catch {
-              setRole('');
-              setStatus('unregistered');
-            }
-          } else {
-            setRole('');
-            setStatus('unregistered');
-          }
+      
+      // Consultar el rol del usuario directamente del contrato
+      try {
+        const contractService = new ContractService();
+        const user = await contractService.getUser(wallet);
+        console.log('📋 Datos del usuario desde el contrato:', user);
+        
+        // Mapeo de roleId a nombre de rol
+        const roleMap: Record<number, string> = {
+          0: '', // Sin rol
+          1: 'PRODUCER',
+          2: 'FACTORY',
+          3: 'RETAILER',
+          4: 'CONSUMER',
+        };
+        
+        // Verificar si es admin consultando el contrato
+        const isAdmin = await contractService.isAdmin(wallet);
+        console.log('👑 ¿Es admin?:', isAdmin);
+        
+        if (isAdmin) {
+          setRole('ADMIN');
+          setStatus('approved');
+        } else if (user.isApproved) {
+          // Usuario aprobado con rol asignado
+          setRole(roleMap[user.roleId] || '');
+          setStatus('approved');
+        } else if (user.roleId > 0) {
+          // Usuario registrado pero no aprobado
+          setRole(roleMap[user.roleId] || '');
+          setStatus('pending');
+        } else {
+          // Usuario no registrado
+          setRole('');
+          setStatus('unregistered');
         }
+      } catch (error) {
+        console.error('Error al consultar rol del contrato:', error);
+        // Si falla la consulta, asumir no registrado
+        setRole('');
+        setStatus('unregistered');
       }
+      
       setManuallyDisconnected(false);
       setChainId(NETWORK_CONFIG.chainId);
     } catch (err: unknown) {
@@ -154,15 +165,54 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
     const eth = Web3Service.getEthereum();
     if (!eth) return;
 
-    const handleAccountsChanged = (...args: unknown[]) => {
+    const handleAccountsChanged = async (...args: unknown[]) => {
       const accounts = args[0] as string[];
-      if (!account || !accounts.length) return;
+      if (!accounts.length) {
+        // Si no hay cuentas, desconectar
+        setAccount(null);
+        setRole('');
+        setStatus('unregistered');
+        return;
+      }
 
       const newAccount = accounts[0];
       if (newAccount !== account) {
         setAccount(newAccount);
-        setRole('');
-        setStatus('unregistered');
+        
+        // Consultar el rol del nuevo usuario desde el contrato
+        try {
+          const contractService = new ContractService();
+          const user = await contractService.getUser(newAccount);
+          
+          const roleMap: Record<number, string> = {
+            0: '',
+            1: 'PRODUCER',
+            2: 'FACTORY',
+            3: 'RETAILER',
+            4: 'CONSUMER',
+          };
+          
+          const isAdmin = await contractService.isAdmin(newAccount);
+          
+          if (isAdmin) {
+            setRole('ADMIN');
+            setStatus('approved');
+          } else if (user.isApproved) {
+            setRole(roleMap[user.roleId] || '');
+            setStatus('approved');
+          } else if (user.roleId > 0) {
+            setRole(roleMap[user.roleId] || '');
+            setStatus('pending');
+          } else {
+            setRole('');
+            setStatus('unregistered');
+          }
+        } catch (error) {
+          console.error('Error al consultar rol del nuevo usuario:', error);
+          setRole('');
+          setStatus('unregistered');
+        }
+        
         setManuallyDisconnected(false);
       }
     };
