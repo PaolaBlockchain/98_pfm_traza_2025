@@ -90,36 +90,44 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
       // Consultar el rol del usuario directamente del contrato
       try {
         const contractService = new ContractService();
-        const userInfo = await contractService.getUserInfo(wallet);
-        console.log('📋 Info completa del usuario desde el contrato:', userInfo);
         
-        // Mapeo de roleId a nombre de rol
-        const roleMap: Record<number, string> = {
-          0: '', // Sin rol
-          1: 'PRODUCER',
-          2: 'FACTORY',
-          3: 'RETAILER',
-          4: 'CONSUMER',
-        };
-        
-        // Mapeo de estados del contrato (enum UserStatus en Solidity)
-        // 0 = Pending, 1 = Approved, 2 = Rejected, 3 = Canceled
-        const statusMap: Record<number, RegistrationStatus> = {
-          0: 'pending',
-          1: 'approved',
-          2: 'rejected',
-          3: 'canceled',
-        };
-        
-        // Verificar si es admin comparando directamente con la dirección conocida
-        const ADMIN_ADDRESS = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
-        const isAdmin = wallet.toLowerCase() === ADMIN_ADDRESS.toLowerCase();
-        console.log('👑 ¿Es admin?:', isAdmin, '(wallet:', wallet, ')');
+        // Primero verificar si es admin consultando la dirección del admin del contrato
+        let isAdmin = false;
+        try {
+          const adminAddress = await contractService.getAdmin();
+          isAdmin = wallet.toLowerCase() === adminAddress.toLowerCase();
+          console.log('👑 Verificando admin - wallet:', wallet, ', admin del contrato:', adminAddress, ', ¿es admin?:', isAdmin);
+        } catch (adminError) {
+          console.error('Error al obtener admin del contrato:', adminError);
+        }
         
         if (isAdmin) {
           setRole('ADMIN');
           setStatus('approved');
+          console.log('✅ Usuario conectado como ADMIN');
         } else {
+          // Para usuarios no-admin, consultar su información del contrato
+          const userInfo = await contractService.getUserInfo(wallet);
+          console.log('📋 Info completa del usuario desde el contrato:', userInfo);
+          
+          // Mapeo de roleId a nombre de rol
+          const roleMap: Record<number, string> = {
+            0: 'ADMIN', // Admin role
+            1: 'PRODUCER',
+            2: 'FACTORY',
+            3: 'RETAILER',
+            4: 'CONSUMER',
+          };
+          
+          // Mapeo de estados del contrato (enum UserStatus en Solidity)
+          // 0 = Pending, 1 = Approved, 2 = Rejected, 3 = Canceled
+          const statusMap: Record<number, RegistrationStatus> = {
+            0: 'pending',
+            1: 'approved',
+            2: 'rejected',
+            3: 'canceled',
+          };
+          
           // Usar el rol y estado real del contrato
           const contractRole = roleMap[userInfo.role] || '';
           const contractStatus = statusMap[userInfo.status] || 'unregistered';
@@ -134,14 +142,18 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
         // Silenciar errores esperados (usuario no registrado)
         if (error?.message?.includes('UserDoesNotExist') || 
             error?.message?.includes('missing revert data') ||
+            error?.message?.includes('0x907b361f') || // Custom error UserDoesNotExist
             error?.code === 'CALL_EXCEPTION') {
-          console.log('ℹ️ Usuario no registrado, mostrando pantalla de registro');
+          console.log('ℹ️ Usuario no registrado en el contrato, mostrando pantalla de registro');
+          // Si falla la consulta, asumir no registrado
+          setRole('');
+          setStatus('unregistered');
         } else {
-          console.error('Error al consultar rol del contrato:', error);
+          console.error('Error inesperado al consultar rol del contrato:', error);
+          // Para errores no esperados, también asumir no registrado
+          setRole('');
+          setStatus('unregistered');
         }
-        // Si falla la consulta, asumir no registrado
-        setRole('');
-        setStatus('unregistered');
       }
       
       setManuallyDisconnected(false);

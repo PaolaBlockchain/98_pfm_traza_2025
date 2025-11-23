@@ -160,11 +160,28 @@ export default function HomePage() {
             </div>
             {/* Lista de verificación informativa para el usuario */}
             <div className="rounded-md border border-gray-200 bg-white p-4 text-xs text-gray-600">
-              <p className="font-mono uppercase tracking-[0.28em] text-gray-400">Lista de verificación</p>
-              <ul className="mt-2 space-y-1 font-mono text-[0.6rem] uppercase tracking-[0.25em] text-gray-600">
-                <li>• Usa cuenta asignada al rol</li>
-                <li>• Verifica red 31337</li>
-                <li>• Confirma datos antes de enviar</li>
+              <p className="font-mono uppercase tracking-[0.28em] text-gray-400 mb-3">Lista de verificación</p>
+              <ul className="mt-2 space-y-2 text-[0.65rem] text-gray-700">
+                <li className="flex items-start gap-2">
+                  <span className={`flex-shrink-0 ${account ? 'text-green-600' : 'text-gray-400'}`}>
+                    {account ? '✓' : '1.'}
+                  </span>
+                  <span className={account ? 'line-through text-gray-400' : ''}>
+                    Conectar a MetaMask
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className={`flex-shrink-0 ${account && role ? 'text-green-600' : 'text-gray-400'}`}>
+                    {account && role ? '✓' : '2.'}
+                  </span>
+                  <span className={account && role ? 'line-through text-gray-400' : ''}>
+                    Seleccionar rol
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="flex-shrink-0 text-gray-400">3.</span>
+                  <span>Enviar solicitud</span>
+                </li>
               </ul>
             </div>
           </div>
@@ -216,6 +233,24 @@ export default function HomePage() {
                   return;
                 }
                 
+                // Detectar errores de conexión con Anvil/red local
+                if (error?.code === 'NETWORK_ERROR' ||
+                    error?.message?.includes('could not detect network') ||
+                    error?.message?.includes('network does not support') ||
+                    error?.message?.includes('missing provider') ||
+                    error?.code === -32603 ||
+                    error?.message?.includes('Internal JSON-RPC error') ||
+                    error?.message?.includes('Failed to fetch') ||
+                    error?.message?.includes('fetch failed')) {
+                  console.error('Error de conexión con la red local:', error);
+                  alert('⚠️ No se puede conectar con la blockchain local (Anvil).\n\n' +
+                        'Verifica que:\n' +
+                        '1. Anvil está ejecutándose (anvil)\n' +
+                        '2. El puerto 8545 está disponible\n' +
+                        '3. MetaMask está configurado para red 31337');
+                  return;
+                }
+                
                 // Para otros errores, sí loguear y mostrar mensaje al usuario
                 console.error('Error al registrar usuario:', error);
                 if (error instanceof Error) {
@@ -225,8 +260,8 @@ export default function HomePage() {
                 }
               }
             }
-          }} disabled={!role} className="justify-center">
-            {uiState === 'not-connected' ? 'Emitir solicitud' : 'Emitir solicitud'}
+          }} disabled={!account || !role} className="justify-center">
+            Emitir solicitud
           </Button>
         </Card>
       )}

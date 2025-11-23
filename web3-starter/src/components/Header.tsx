@@ -89,7 +89,7 @@ export default function Header() {
         <div className="flex items-center flex-shrink-0">
           {!account && (
             <button onClick={connect} className={`${navClass} border-blue-300/90 bg-blue-50/90 text-blue-600 hover:border-blue-400 hover:text-blue-700`}>
-              <span>Conectar</span>
+              <span>Conectar a MetaMask</span>
             </button>
           )}
           {account && (

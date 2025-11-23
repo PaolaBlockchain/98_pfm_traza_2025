@@ -222,8 +222,19 @@ export default function AdminUsersPage() {
 
       {/* Panel de eventos de trazabilidad */}
       <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-200 px-6 py-4">
+        <div className="border-b border-gray-200 px-6 py-4 flex justify-between items-center">
           <h2 className="text-base font-semibold text-gray-900">Historial de Eventos (Trazabilidad)</h2>
+          <button
+            onClick={() => {
+              if (window.confirm('¿Estás seguro de que quieres limpiar todo el historial de eventos?')) {
+                RequestHistoryService.clearHistory();
+                window.location.reload();
+              }
+            }}
+            className="px-3 py-1 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded hover:bg-red-100 transition-colors"
+          >
+            🗑️ Limpiar Historial
+          </button>
         </div>
         <div className="overflow-x-auto max-h-96 overflow-y-auto">
           <table className="min-w-full text-left text-sm">
