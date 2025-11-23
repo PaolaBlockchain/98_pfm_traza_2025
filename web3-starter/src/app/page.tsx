@@ -66,17 +66,23 @@ export default function HomePage() {
   React.useEffect(() => {
     console.log('🔄 Verificando redirección:', { status, account, role });
     
-    if (status === 'approved' && account && role) {
+    // Solo redirigir si tenemos status y role confirmados (no valores vacíos o 'unregistered')
+    if (status === 'approved' && account && role && role !== '') {
       console.log('✅ Usuario aprobado, redirigiendo...');
       
-      // Redirigir a admin dashboard si es admin, sino a dashboard normal
-      if (role === 'ADMIN') {
-        console.log('👑 Redirigiendo a /admin/users');
-        router.push('/admin/users');
-      } else {
-        console.log('👤 Redirigiendo a /dashboard');
-        router.push('/dashboard');
-      }
+      // Pequeño delay para asegurar que todo está sincronizado
+      const timer = setTimeout(() => {
+        // Redirigir a admin dashboard si es admin, sino a dashboard normal
+        if (role === 'ADMIN') {
+          console.log('👑 Redirigiendo a /admin/users');
+          router.push('/admin/users');
+        } else {
+          console.log('👤 Redirigiendo a /dashboard');
+          router.push('/dashboard');
+        }
+      }, 300);
+      
+      return () => clearTimeout(timer);
     }
   }, [status, account, role, router]);
 

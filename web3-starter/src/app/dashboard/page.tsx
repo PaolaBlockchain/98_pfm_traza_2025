@@ -26,9 +26,10 @@ export default function DashboardPage() {
   // Estado local para verificar si aún está cargando
   const [isLoading, setIsLoading] = React.useState(true);
 
-  // Redirigir usuarios pending/rejected/canceled a la página principal
+  // Redirigir usuarios no aprobados a la página principal
   React.useEffect(() => {
-    if (!isLoading && status !== 'approved' && status !== 'unregistered') {
+    // Si no está loading y el usuario no está aprobado, redirigir
+    if (!isLoading && status !== 'approved') {
       console.log(`🔄 Usuario con estado "${status}" redirigido a página principal`);
       router.push('/');
     }
@@ -38,7 +39,7 @@ export default function DashboardPage() {
   React.useEffect(() => {
     const timer = setTimeout(() => {
       setIsLoading(false);
-    }, 500);
+    }, 1000); // Aumentado a 1 segundo para dar tiempo a la consulta del contrato
     return () => clearTimeout(timer);
   }, []);
 
