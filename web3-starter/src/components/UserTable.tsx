@@ -1,6 +1,6 @@
 'use client';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import React from 'react';
 
 export type UserRow = {
   id: string;
@@ -18,30 +18,42 @@ export type UserTableProps = {
 
 export function UserTable({ title = 'Usuarios', rows, onApprove, onReject }: UserTableProps) {
   return (
-    <Card title={title}>
+    <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+      <div className="border-b border-gray-200 px-6 py-4">
+        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
+      </div>
       <div className="overflow-x-auto">
         <table className="min-w-full text-left text-sm">
           <thead className="bg-gray-100">
             <tr>
-              <th className="px-3 py-2 font-semibold">Wallet</th>
-              <th className="px-3 py-2 font-semibold">Rol</th>
-              <th className="px-3 py-2 font-semibold">Estado</th>
-              <th className="px-3 py-2 font-semibold">Acciones</th>
+              <th className="px-3 py-2 font-semibold text-gray-900">Wallet</th>
+              <th className="px-3 py-2 font-semibold text-gray-900">Rol</th>
+              <th className="px-3 py-2 font-semibold text-gray-900">Estado</th>
+              <th className="px-3 py-2 font-semibold text-gray-900">Acciones</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-3 py-4 text-center text-gray-600">
+                <td colSpan={4} className="px-3 py-4 text-center text-gray-500">
                   Sin solicitudes pendientes.
                 </td>
               </tr>
             )}
             {rows.map((row) => (
-              <tr key={row.id} className="border-t">
-                <td className="px-3 py-2 font-mono">{row.address}</td>
-                <td className="px-3 py-2 capitalize">{row.role.toLowerCase()}</td>
-                <td className="px-3 py-2 capitalize">{row.status}</td>
+              <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50">
+                <td className="px-3 py-2 font-mono text-gray-700">{row.address.slice(0, 6)}...{row.address.slice(-4)}</td>
+                <td className="px-3 py-2 text-gray-700 capitalize">{row.role.toLowerCase()}</td>
+                <td className="px-3 py-2 capitalize">
+                  <span className={
+                    row.status === 'pending' ? 'text-yellow-600' :
+                    row.status === 'approved' ? 'text-green-600' :
+                    row.status === 'rejected' ? 'text-red-600' :
+                    'text-gray-600'
+                  }>
+                    {row.status}
+                  </span>
+                </td>
                 <td className="px-3 py-2">
                   {row.status === 'pending' ? (
                     <div className="flex gap-2">
@@ -69,6 +81,6 @@ export function UserTable({ title = 'Usuarios', rows, onApprove, onReject }: Use
           </tbody>
         </table>
       </div>
-    </Card>
+    </div>
   );
 }

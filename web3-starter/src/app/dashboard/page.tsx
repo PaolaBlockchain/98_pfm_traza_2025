@@ -9,8 +9,10 @@
  */
 
 "use client";
+import React from 'react';
 import { useWallet } from '@/hooks/useWallet';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 /**
  * Componente principal del dashboard
@@ -19,6 +21,35 @@ import Link from 'next/link';
 export default function DashboardPage() {
   // Obtener estado global de la wallet
   const { account, role, status } = useWallet();
+  const router = useRouter();
+  
+  // Estado local para verificar si aún está cargando
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  // Redirigir usuarios pending/rejected/canceled a la página principal
+  React.useEffect(() => {
+    if (!isLoading && status !== 'approved' && status !== 'unregistered') {
+      console.log(`🔄 Usuario con estado "${status}" redirigido a página principal`);
+      router.push('/');
+    }
+  }, [status, isLoading, router]);
+
+  // Esperar un momento para que el estado se sincronice
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Mostrar loading mientras se sincroniza el estado
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[20vh]">
+        <p className="text-gray-600">Cargando...</p>
+      </div>
+    );
+  }
 
   // Bloquear acceso si no hay wallet conectada
   if (!account) {
@@ -32,6 +63,37 @@ export default function DashboardPage() {
 
   // Mostrar mensaje de acceso limitado para usuarios no aprobados
   if (status !== 'approved') {
+    // Mensaje específico para usuarios rechazados
+    if (status === 'rejected') {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[50vh]">
+          <div className="max-w-md w-full bg-red-50 border-2 border-red-300 rounded-lg p-6 shadow-lg">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-600">
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </span>
+              <h1 className="text-xl font-bold text-red-700">❌ Solicitud Rechazada</h1>
+            </div>
+            <p className="text-sm text-red-800 mb-4 font-semibold">
+              Tu cuenta fue rechazada por el administrador.
+            </p>
+            <p className="text-sm text-red-700 mb-4">
+              No tienes permisos para acceder a este panel. Debes realizar una nueva solicitud desde la página principal.
+            </p>
+            <Link 
+              href="/" 
+              className="block w-full text-center bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded transition-colors"
+            >
+              🔄 Ir a realizar nueva solicitud
+            </Link>
+          </div>
+        </div>
+      );
+    }
+    
+    // Mensaje para otros estados (pending, canceled, etc.)
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh]">
         <h1 className="text-xl font-bold text-orange-600 mb-4">Acceso limitado</h1>

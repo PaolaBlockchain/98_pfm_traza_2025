@@ -14,6 +14,7 @@
 
 import { ethers } from 'ethers';
 import { CONTRACT_CONFIG } from '@/contracts/config';
+import { RequestHistoryService } from './requestHistoryService';
 
 export class ContractService {
   private provider: ethers.BrowserProvider;
@@ -54,10 +55,29 @@ export class ContractService {
   async requestUserRole(roleId: number) {
     try {
       const signer = await this.getSigner();
+      const signerAddress = await signer.getAddress();
       const contractWithSigner = this.contract.connect(signer);
       const tx = await contractWithSigner.requestUserRoleById(roleId);
-      return await tx.wait();
-    } catch (error) {
+      const receipt = await tx.wait();
+      
+      // Registrar en el historial para trazabilidad
+      RequestHistoryService.addEntry({
+        address: signerAddress,
+        action: 'requested',
+        roleId: roleId,
+      });
+      
+      return receipt;
+    } catch (error: any) {
+      // Detectar si el usuario canceló la transacción
+      if (error?.code === 4001 || 
+          error?.code === 'ACTION_REJECTED' ||
+          error?.message?.includes('User denied') ||
+          error?.message?.includes('user rejected')) {
+        // Re-lanzar el error sin loguearlo (se manejará en page.tsx)
+        throw error;
+      }
+      // Para otros errores, sí loguear
       console.error('Error al solicitar rol:', error);
       throw error;
     }
@@ -77,8 +97,13 @@ export class ContractService {
         role: Number(user.rol), // 0=Admin, 1=Producer, 2=Factory, 3=Retailer, 4=Consumer
         status: Number(user.status), // 0=Pending, 1=Approved, 2=Rejected, 3=Canceled
       };
-    } catch (error) {
-      console.error('Error al obtener info de usuario:', error);
+    } catch (error: any) {
+      // No loguear si es un error esperado (usuario no registrado)
+      if (!error?.message?.includes('UserDoesNotExist') && 
+          !error?.message?.includes('missing revert data') &&
+          error?.code !== 'CALL_EXCEPTION') {
+        console.error('Error al obtener info de usuario:', error);
+      }
       throw error;
     }
   }
@@ -95,8 +120,15 @@ export class ContractService {
         roleId: userInfo.role,
         isApproved: userInfo.status === 1, // 1 = Approved
       };
-    } catch (error) {
-      console.error('Error al obtener usuario:', error);
+    } catch (error: any) {
+      // Silenciar error si el usuario simplemente no existe (es esperado)
+      if (error?.message?.includes('UserDoesNotExist') || 
+          error?.message?.includes('missing revert data') ||
+          error?.code === 'CALL_EXCEPTION') {
+        console.log('ℹ️ Usuario no registrado:', address);
+      } else {
+        console.error('Error al obtener usuario:', error);
+      }
       // Si el usuario no existe o hay error, retornar valores por defecto
       return { roleId: 0, isApproved: false };
     }
@@ -112,7 +144,10 @@ export class ContractService {
       const signer = await this.getSigner();
       const contractWithSigner = this.contract.connect(signer);
       const tx = await contractWithSigner.approveUser(address);
-      return await tx.wait();
+      const receipt = await tx.wait();
+      
+      // El historial se registrará automáticamente via evento UserStatusChanged
+      return receipt;
     } catch (error) {
       console.error('Error al aprobar usuario:', error);
       throw error;
@@ -129,9 +164,44 @@ export class ContractService {
       const signer = await this.getSigner();
       const contractWithSigner = this.contract.connect(signer);
       const tx = await contractWithSigner.rejectUser(address);
-      return await tx.wait();
+      const receipt = await tx.wait();
+      
+      // El historial se registrará automáticamente via evento UserStatusChanged
+      return receipt;
     } catch (error) {
       console.error('Error al rechazar usuario:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Cancelar la propia cuenta del usuario (solo si está en estado Pending)
+   * @returns Promise con el recibo de la transacción
+   */
+  async cancelMyAccount() {
+    try {
+      const signer = await this.getSigner();
+      const contractWithSigner = this.contract.connect(signer);
+      const tx = await contractWithSigner.cancelMyAccount();
+      const receipt = await tx.wait();
+      
+      console.log('Cuenta cancelada exitosamente');
+      return receipt;
+    } catch (error) {
+      console.error('Error al cancelar cuenta:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtener la dirección del admin del contrato
+   * @returns Dirección del admin
+   */
+  async getAdmin(): Promise<string> {
+    try {
+      return await this.contract.admin();
+    } catch (error) {
+      console.error('Error al obtener admin:', error);
       throw error;
     }
   }
@@ -171,6 +241,26 @@ export class ContractService {
    */
   onUserRegistered(callback: (user: string, id: bigint, role: number, status: number) => void) {
     this.contract.on('UserRegistered', callback);
+  }
+
+  /**
+   * Obtener eventos pasados de UserRegistered desde el bloque 0
+   * @returns Array de eventos con los usuarios registrados
+   */
+  async getPastUserRegisteredEvents() {
+    try {
+      const filter = this.contract.filters.UserRegistered();
+      const events = await this.contract.queryFilter(filter, 0);
+      return events.map(event => ({
+        user: event.args[0] as string,
+        id: event.args[1] as bigint,
+        role: Number(event.args[2]),
+        status: Number(event.args[3]),
+      }));
+    } catch (error) {
+      console.error('Error al obtener eventos pasados:', error);
+      return [];
+    }
   }
 
   /**

@@ -16,6 +16,7 @@ library SupplyChainHelper {
     /// @param to    Código uint8 del estado destino
     function canTransition(uint8 from, uint8 to) internal pure returns (bool) {
         // Pending -> Approved / Rejected / Canceled
+        // Solo usuarios Pending pueden cancelar su solicitud
         if (from == 0) {
             return (to == 1 || to == 2 || to == 3);
         }
@@ -23,9 +24,9 @@ library SupplyChainHelper {
         if (from == 1) {
             return (to == 3);
         }
-        // Rejected -> Canceled
+        // Rejected -> NO puede cancelar (debe esperar a volver a solicitar)
         if (from == 2) {
-            return (to == 3);
+            return false;
         }
         // Canceled -> (terminal)
         if (from == 3) {

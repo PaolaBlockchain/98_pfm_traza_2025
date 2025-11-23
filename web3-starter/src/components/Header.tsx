@@ -53,9 +53,19 @@ export default function Header() {
                     {formatRole(role)}
                   </span>
                 )}
-                {!role && account && (
+                {!role && account && status !== 'rejected' && (
                   <span className="text-[0.5rem] font-mono text-orange-500 uppercase tracking-[0.3em]">
                     Sin rol
+                  </span>
+                )}
+                {status === 'rejected' && (
+                  <span className="text-[0.5rem] font-mono text-red-600 uppercase tracking-[0.25em] font-bold bg-red-50 px-2 py-1 rounded border border-red-300">
+                    ❌ RECHAZADO
+                  </span>
+                )}
+                {status === 'pending' && (
+                  <span className="text-[0.5rem] font-mono text-yellow-600 uppercase tracking-[0.25em] font-semibold bg-yellow-50 px-2 py-1 rounded border border-yellow-300">
+                    ⏳ PENDIENTE
                   </span>
                 )}
               </div>

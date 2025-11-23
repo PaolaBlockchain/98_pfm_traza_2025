@@ -1,4 +1,4 @@
-import SupplyChainABI from './SupplyChain.json';
+import SupplyChainJSON from './SupplyChain.json';
 
 export const NETWORK_CONFIG = {
   chainId: 31337,
@@ -12,5 +12,5 @@ export const CONTRACT_CONFIG = {
   // Dirección del contrato desplegado en Anvil
   address: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  abi: SupplyChainABI as any, // Cast necesario para compatibilidad con ethers.js
+  abi: (SupplyChainJSON as any).abi, // Extraer el ABI del JSON de Foundry
 };

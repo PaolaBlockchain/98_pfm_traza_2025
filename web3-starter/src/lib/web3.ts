@@ -44,10 +44,15 @@ export const Web3Service = {
         method: 'wallet_requestPermissions',
         params: [{ eth_accounts: {} }],
       });
-    } catch (error) {
-      // Si el usuario cancela, lanzar error
-      console.error('Error al solicitar permisos:', error);
-      throw new Error('Conexión cancelada por el usuario');
+    } catch (error: any) {
+      // Si el usuario cancela (código 4001), lanzar error específico
+      if (error?.code === 4001 || error?.message?.includes('User rejected')) {
+        const rejectionError = new Error('USER_REJECTED');
+        (rejectionError as any).code = 4001;
+        throw rejectionError;
+      }
+      // Para otros errores, re-lanzar
+      throw error;
     }
 
     // Ahora solicitar las cuentas - esto debería usar los permisos recién otorgados

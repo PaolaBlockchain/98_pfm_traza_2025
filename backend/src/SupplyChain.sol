@@ -287,10 +287,11 @@ contract SupplyChain {
     /**
      * @notice Solicitar rol por enum directo (sin strings, simple y barato)
      * @dev SEGURIDAD: Registra nuevos usuarios con validaciones estrictas
-     * - Previene doble registro de la misma dirección
+     * - Previene doble registro de la misma dirección (excepto si fue rechazado/cancelado)
      * - Bloquea solicitud de rol Admin (solo roles operativos permitidos)
      * - Usuario inicia siempre en estado Pending (requiere aprobación)
      * - Emite eventos para auditoría y sincronización frontend
+     * - Permite re-registro si el usuario fue rechazado o cancelado
      * GAS OPTIMIZATION: 
      * - Custom errors (~50 gas)
      * - Unchecked incremento (~35 gas)
@@ -298,7 +299,25 @@ contract SupplyChain {
      * @param rol_ El rol solicitado (Producer, Factory, Retailer, Consumer)
      */
     function requestUserRoleByEnum(Roles rol_) external {
-        if (addressToUserId[msg.sender] != 0) revert UserAlreadyRegistered();
+        uint256 existingId = addressToUserId[msg.sender];
+        
+        // Permitir re-registro solo si el usuario fue rechazado o cancelado
+        if (existingId != 0) {
+            UserStatus currentStatus = users[existingId].status;
+            if (currentStatus != UserStatus.Rejected && currentStatus != UserStatus.Canceled) {
+                revert UserAlreadyRegistered();
+            }
+            // Si fue rechazado o cancelado, actualizar el usuario existente
+            if (!_isAllowedNonAdminRole(rol_)) revert AdminRoleNotAllowed();
+            
+            users[existingId].rol = rol_;
+            users[existingId].status = UserStatus.Pending;
+            
+            emit UserRegistered(msg.sender, existingId, rol_, UserStatus.Pending);
+            return;
+        }
+        
+        // Usuario nuevo - crear registro
         if (!_isAllowedNonAdminRole(rol_)) revert AdminRoleNotAllowed();
 
         // GAS: unchecked seguro, nextUserId nunca alcanzará 2^256
@@ -324,11 +343,31 @@ contract SupplyChain {
      * - Valida que rolId esté dentro del rango de enum Roles
      * - Previene integer overflow/underflow (Solidity 0.8.20)
      * - Bloquea rol Admin (id = 0)
+     * - Permite re-registro si el usuario fue rechazado o cancelado
      * GAS OPTIMIZATION: Mismas optimizaciones que requestUserRoleByEnum
      * @param rolId Índice del rol (1=Producer, 2=Factory, 3=Retailer, 4=Consumer)
      */
     function requestUserRoleById(uint8 rolId) external {
-        if (addressToUserId[msg.sender] != 0) revert UserAlreadyRegistered();
+        uint256 existingId = addressToUserId[msg.sender];
+        
+        // Permitir re-registro solo si el usuario fue rechazado o cancelado
+        if (existingId != 0) {
+            UserStatus currentStatus = users[existingId].status;
+            if (currentStatus != UserStatus.Rejected && currentStatus != UserStatus.Canceled) {
+                revert UserAlreadyRegistered();
+            }
+            // Si fue rechazado o cancelado, actualizar el usuario existente
+            if (rolId > uint8(type(Roles).max)) revert RoleOutOfRange();
+            if (!SupplyChainHelper.isAllowedNonAdminRole(rolId)) revert AdminRoleNotAllowed();
+            
+            users[existingId].rol = Roles(rolId);
+            users[existingId].status = UserStatus.Pending;
+            
+            emit UserRegistered(msg.sender, existingId, Roles(rolId), UserStatus.Pending);
+            return;
+        }
+        
+        // Usuario nuevo - crear registro
         if (rolId > uint8(type(Roles).max)) revert RoleOutOfRange();
         if (!SupplyChainHelper.isAllowedNonAdminRole(rolId)) revert AdminRoleNotAllowed();
 

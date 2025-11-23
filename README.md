@@ -1,5 +1,36 @@
 # 🔗 Supply Chain Tracker - Proyecto de Desarrollo Blockchain
 
+## 🚀 Inicio Rápido
+
+```powershell
+# 1. Clonar el repositorio
+git clone <url-repo>
+cd 98_pfm_traza_2025
+
+# 2. Instalar dependencias del frontend
+cd web3-starter
+npm install
+cd ..
+
+# 3. Iniciar el sistema completo
+.\RESTART-ALL.ps1
+
+# 4. Esperar ~40 segundos
+# 5. Conectar como ADMIN y aprobar usuarios
+# 6. http://localhost:3000
+```
+
+**IMPORTANTE:** Los usuarios de prueba se registran automáticamente pero están en estado **PENDING**. El admin debe aprobarlos desde la interfaz web en `/admin/users`.
+
+### 📖 Documentación Disponible
+
+- **[GUIA_TESTING.md](./GUIA_TESTING.md)** - Cómo probar el sistema con usuarios de prueba
+- **[HISTORIAL_SOLICITUDES.md](./HISTORIAL_SOLICITUDES.md)** - Sistema de historial de solicitudes
+- **[PLAN_INTEGRACION.md](./PLAN_INTEGRACION.md)** - Plan de integración de funcionalidades
+- **[CASOS_DE_USO.md](./CASOS_DE_USO.md)** - Casos de uso del sistema
+
+---
+
 ## 🎯 Objetivos del Proyecto
 
 **Supply Chain Tracker** es un proyecto educativo donde desarrollarás desde cero una aplicación descentralizada (DApp) completa para gestionar trazabilidad en cadenas de suministro.

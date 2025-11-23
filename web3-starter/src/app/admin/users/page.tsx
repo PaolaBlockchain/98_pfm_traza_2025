@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useWallet } from '@/hooks/useWallet';
 import { UserTable, type UserRow } from '@/components/UserTable';
 import { ContractService } from '@/lib/contractService';
+import { RequestHistoryService } from '@/lib/requestHistoryService';
 
 /**
  * Componente AdminUsersPage - Interfaz de gestión y aprobación de usuarios
@@ -13,6 +14,7 @@ import { ContractService } from '@/lib/contractService';
  * - Proporcionar acciones de aprobación y rechazo que llaman al contrato
  * - Controlar acceso exclusivo para administradores aprobados
  * - Mantener sincronización entre blockchain y UI
+ * - Mostrar historial de solicitudes y rechazos repetidos
  *
  * Características principales:
  * - Control de acceso restringido a administradores aprobados
@@ -20,6 +22,7 @@ import { ContractService } from '@/lib/contractService';
  * - Integración completa con smart contract (approveUser/rejectUser)
  * - Integración con componente UserTable para UI consistente
  * - Limpieza automática de listeners al desmontar componente
+ * - Alertas sobre usuarios con múltiples rechazos
  *
  * @returns {JSX.Element} El componente de página de gestión de usuarios administrativos
  */
@@ -28,6 +31,10 @@ export default function AdminUsersPage() {
 
   // Estado de usuarios registrados en el contrato
   const [users, setUsers] = useState<UserRow[]>([]);
+  
+  // Estado para paginación del historial
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   /**
    * Efecto para escuchar eventos UserRegistered del contrato
@@ -41,26 +48,37 @@ export default function AdminUsersPage() {
       try {
         const contractService = new ContractService();
 
-        // Cargar eventos históricos del contrato
-        // Como no tenemos una función para obtener todos los usuarios,
-        // vamos a consultar la dirección conocida del Producer
-        const producerAddress = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
+        // Obtener eventos pasados del contrato (NO depender de localStorage)
+        console.log('📜 Cargando eventos pasados del contrato...');
+        const pastEvents = await contractService.getPastUserRegisteredEvents();
+        console.log(`📦 Eventos encontrados: ${pastEvents.length}`);
         
-        try {
-          const userInfo = await contractService.getUserInfo(producerAddress);
-          const user: UserRow = {
-            id: producerAddress,
-            address: producerAddress,
-            role: getRoleName(userInfo.role),
-            status: getStatusName(userInfo.status),
-          };
-          setUsers([user]);
-        } catch {
-          console.log('Usuario Producer aún no registrado');
+        // Obtener wallets únicas
+        const userAddresses = new Set(pastEvents.map(event => event.user));
+        
+        // Consultar el estado ACTUAL de cada usuario en el contrato
+        const loadedUsers: UserRow[] = [];
+        for (const address of userAddresses) {
+          try {
+            const userInfo = await contractService.getUserInfo(address);
+            loadedUsers.push({
+              id: address,
+              address: address,
+              role: getRoleName(userInfo.role),
+              status: getStatusName(userInfo.status),
+            });
+          } catch (error) {
+            console.log(`Usuario ${address} no encontrado en contrato`);
+          }
         }
+        
+        console.log(`✅ Admin cargó ${loadedUsers.length} usuarios desde el contrato`);
+        setUsers(loadedUsers);
 
-        // Escuchar evento UserRegistered para nuevos registros
+        // Escuchar evento UserRegistered para nuevos registros Y re-solicitudes
         contractService.onUserRegistered((userAddress, id, role, userStatus) => {
+          console.log(`🔔 Admin recibió evento UserRegistered:`, userAddress, getRoleName(role), getStatusName(userStatus));
+          
           const newUser: UserRow = {
             id: userAddress,
             address: userAddress,
@@ -71,21 +89,52 @@ export default function AdminUsersPage() {
           setUsers((prevUsers) => {
             const existingIndex = prevUsers.findIndex((u) => u.address === userAddress);
             if (existingIndex >= 0) {
+              const previousStatus = prevUsers[existingIndex].status;
+              console.log(`♻️ Actualizando usuario ${userAddress}: ${previousStatus} → ${getStatusName(userStatus)}`);
+              
               const updated = [...prevUsers];
               updated[existingIndex] = newUser;
+              
               return updated;
             }
+            
+            console.log(`➕ Agregando nuevo usuario: ${userAddress}`);
+            
             return [...prevUsers, newUser];
           });
         });
 
-        // Escuchar evento UserStatusChanged para actualizar la UI
+        // Escuchar evento UserStatusChanged para actualizar la UI Y registrar en historial
         contractService.onUserStatusChanged((userAddress, id, newStatus) => {
+          console.log(`🔔 Evento UserStatusChanged recibido:`, userAddress, getStatusName(newStatus));
+          
+          // Actualizar UI
           setUsers((prevUsers) =>
             prevUsers.map((u) =>
               u.address === userAddress ? { ...u, status: getStatusName(newStatus) } : u
             )
           );
+          
+          // Registrar en historial para trazabilidad
+          const statusName = getStatusName(newStatus);
+          if (statusName === 'approved') {
+            RequestHistoryService.addEntry({
+              address: userAddress,
+              action: 'approved',
+              adminAddress: account,
+            });
+          } else if (statusName === 'rejected') {
+            RequestHistoryService.addEntry({
+              address: userAddress,
+              action: 'rejected',
+              adminAddress: account,
+            });
+          } else if (statusName === 'canceled') {
+            RequestHistoryService.addEntry({
+              address: userAddress,
+              action: 'canceled',
+            });
+          }
         });
 
         // Limpiar listeners al desmontar
@@ -118,7 +167,8 @@ export default function AdminUsersPage() {
       await contractService.approveUser(id);
       console.log('Usuario aprobado:', id);
       
-      // El estado se actualizará automáticamente via el evento UserStatusChanged
+      // El historial se registrará automáticamente via evento UserStatusChanged
+      // El re-render también se activará automáticamente
     } catch (error: unknown) {
       console.error('Error al aprobar usuario:', error);
       if (error instanceof Error) {
@@ -141,7 +191,8 @@ export default function AdminUsersPage() {
       await contractService.rejectUser(id);
       console.log('Usuario rechazado:', id);
       
-      // El estado se actualizará automáticamente via el evento UserStatusChanged
+      // El historial se registrará automáticamente via evento UserStatusChanged
+      // El re-render también se activará automáticamente
     } catch (error: unknown) {
       console.error('Error al rechazar usuario:', error);
       if (error instanceof Error) {
@@ -151,6 +202,13 @@ export default function AdminUsersPage() {
       }
     }
   };
+
+  // Calcular datos de paginación
+  const allHistory = RequestHistoryService.getHistory().sort((a, b) => b.timestamp - a.timestamp);
+  const totalPages = Math.ceil(allHistory.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentHistory = allHistory.slice(startIndex, endIndex);
 
   return (
     <section className="space-y-4">
@@ -162,8 +220,122 @@ export default function AdminUsersPage() {
         </p>
       </header>
 
+      {/* Panel de eventos de trazabilidad */}
+      <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+        <div className="border-b border-gray-200 px-6 py-4">
+          <h2 className="text-base font-semibold text-gray-900">Historial de Eventos (Trazabilidad)</h2>
+        </div>
+        <div className="overflow-x-auto max-h-96 overflow-y-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-gray-100 sticky top-0">
+              <tr>
+                <th className="px-3 py-2 font-semibold text-gray-900">Timestamp</th>
+                <th className="px-3 py-2 font-semibold text-gray-900">Wallet</th>
+                <th className="px-3 py-2 font-semibold text-gray-900">Acción</th>
+                <th className="px-3 py-2 font-semibold text-gray-900">Rol</th>
+                <th className="px-3 py-2 font-semibold text-gray-900">Admin</th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentHistory.map((entry) => (
+                  <tr key={entry.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="px-3 py-2 text-gray-600">
+                      {new Date(entry.timestamp).toLocaleString('es-ES', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit'
+                      })}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-gray-700">
+                      {entry.address.slice(0, 6)}...{entry.address.slice(-4)}
+                    </td>
+                    <td className="px-3 py-2">
+                      <span
+                        className={
+                          entry.action === 'requested'
+                            ? 'bg-blue-100 text-blue-700 px-2 py-1 rounded font-medium'
+                            : entry.action === 'approved'
+                            ? 'bg-green-100 text-green-700 px-2 py-1 rounded font-medium'
+                            : entry.action === 'rejected'
+                            ? 'bg-red-100 text-red-700 px-2 py-1 rounded font-medium'
+                            : 'bg-gray-100 text-gray-700 px-2 py-1 rounded font-medium'
+                        }
+                      >
+                        {entry.action === 'requested' && '📝 Solicitado'}
+                        {entry.action === 'approved' && '✅ Aprobado'}
+                        {entry.action === 'rejected' && '❌ Rechazado'}
+                        {entry.action === 'canceled' && '🚫 Cancelado'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-gray-700 capitalize">
+                      {entry.roleId !== undefined ? 
+                        (['Admin', 'Producer', 'Factory', 'Retailer', 'Consumer'][entry.roleId] || '-') 
+                        : '-'}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-gray-600">
+                      {entry.adminAddress ? 
+                        `${entry.adminAddress.slice(0, 6)}...${entry.adminAddress.slice(-4)}` 
+                        : '-'}
+                    </td>
+                  </tr>
+                ))}
+              {allHistory.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-3 py-8 text-center text-gray-500">
+                    No hay eventos registrados aún
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        
+        {/* Paginación */}
+        {totalPages > 1 && (
+          <div className="border-t border-gray-200 px-6 py-3 flex items-center justify-between">
+            <div className="text-sm text-gray-600">
+              Mostrando {startIndex + 1} - {Math.min(endIndex, allHistory.length)} de {allHistory.length} eventos
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className={`px-3 py-1 rounded text-sm font-medium ${
+                  currentPage === 1
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                Anterior
+              </button>
+              <span className="px-3 py-1 text-sm text-gray-700">
+                Página {currentPage} de {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className={`px-3 py-1 rounded text-sm font-medium ${
+                  currentPage === totalPages
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                Siguiente
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Tabla de gestión de usuarios con acciones de aprobación/rechazo */}
-      <UserTable rows={users} onApprove={handleApprove} onReject={handleReject} />
+      <UserTable 
+        rows={users} 
+        onApprove={handleApprove} 
+        onReject={handleReject} 
+      />
     </section>
   );
 }
