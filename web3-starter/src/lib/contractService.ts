@@ -148,7 +148,23 @@ export class ContractService {
       
       // El historial se registrará automáticamente via evento UserStatusChanged
       return receipt;
-    } catch (error) {
+    } catch (error: any) {
+      // No loguear si el usuario canceló la transacción
+      const errorMessage = error?.message?.toLowerCase() || '';
+      const errorCode = error?.code;
+      
+      if (
+        errorCode === 4001 ||
+        errorCode === 'ACTION_REJECTED' ||
+        errorMessage.includes('user denied') ||
+        errorMessage.includes('user rejected') ||
+        errorMessage.includes('rejected')
+      ) {
+        // Usuario canceló, solo re-lanzar sin loguear
+        throw error;
+      }
+      
+      // Para otros errores, sí loguear
       console.error('Error al aprobar usuario:', error);
       throw error;
     }
@@ -168,7 +184,23 @@ export class ContractService {
       
       // El historial se registrará automáticamente via evento UserStatusChanged
       return receipt;
-    } catch (error) {
+    } catch (error: any) {
+      // No loguear si el usuario canceló la transacción
+      const errorMessage = error?.message?.toLowerCase() || '';
+      const errorCode = error?.code;
+      
+      if (
+        errorCode === 4001 ||
+        errorCode === 'ACTION_REJECTED' ||
+        errorMessage.includes('user denied') ||
+        errorMessage.includes('user rejected') ||
+        errorMessage.includes('rejected')
+      ) {
+        // Usuario canceló, solo re-lanzar sin loguear
+        throw error;
+      }
+      
+      // Para otros errores, sí loguear
       console.error('Error al rechazar usuario:', error);
       throw error;
     }
@@ -292,5 +324,160 @@ export class ContractService {
    */
   getContractAddress(): string {
     return CONTRACT_CONFIG.address;
+  }
+
+  // ==================== GESTIÓN DE TOKENS ====================
+
+  /**
+   * Crear un nuevo token
+   * @param name - Nombre del token
+   * @param totalSupply - Cantidad total de tokens
+   * @param features - Metadatos en formato JSON
+   * @param parentId - ID del token padre (0 para tokens raíz)
+   * @returns Promise con el recibo de la transacción
+   */
+  async createToken(
+    name: string,
+    totalSupply: number,
+    features: string,
+    parentId: number = 0
+  ) {
+    try {
+      const signer = await this.getSigner();
+      const contractWithSigner = this.contract.connect(signer);
+      
+      console.log('Creando token:', { name, totalSupply, features, parentId });
+      
+      const tx = await contractWithSigner.createToken(
+        name,
+        totalSupply,
+        features,
+        parentId
+      );
+      
+      const receipt = await tx.wait();
+      console.log('Token creado exitosamente:', receipt);
+      
+      return receipt;
+    } catch (error: any) {
+      console.error('Error al crear token:', error);
+      
+      // Detectar errores específicos del contrato
+      if (error?.message?.includes('ZeroSupply')) {
+        throw new Error('La cantidad total debe ser mayor a 0');
+      }
+      if (error?.message?.includes('RoleNotAllowedToCreateToken')) {
+        throw new Error('Tu rol no tiene permisos para crear tokens');
+      }
+      if (error?.message?.includes('CreatorNotApproved')) {
+        throw new Error('Tu cuenta debe estar aprobada para crear tokens');
+      }
+      if (error?.message?.includes('InvalidParent')) {
+        throw new Error('Token padre inválido para tu rol');
+      }
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Obtener información de un token
+   * @param tokenId - ID del token
+   * @returns Información del token
+   */
+  async getToken(tokenId: number) {
+    try {
+      const token = await this.contract.getToken(tokenId);
+      return {
+        id: Number(token.id),
+        creator: token.creator,
+        name: token.name,
+        totalSupply: Number(token.totalSupply),
+        features: token.features,
+        parentId: Number(token.parentId),
+        dateCreated: Number(token.dateCreated),
+      };
+    } catch (error: any) {
+      if (error?.message?.includes('TokenDoesNotExist')) {
+        throw new Error('El token no existe');
+      }
+      console.error('Error al obtener token:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtener balance de un token para un usuario
+   * @param tokenId - ID del token
+   * @param userAddress - Dirección del usuario
+   * @returns Balance del token
+   */
+  async getTokenBalance(tokenId: number, userAddress: string): Promise<number> {
+    try {
+      const balance = await this.contract.getTokenBalance(tokenId, userAddress);
+      return Number(balance);
+    } catch (error) {
+      console.error('Error al obtener balance del token:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Obtener todos los tokens de un usuario
+   * @param userAddress - Dirección del usuario
+   * @returns Array de IDs de tokens
+   */
+  async getUserTokens(userAddress: string): Promise<number[]> {
+    try {
+      const tokenIds = await this.contract.getUserTokens(userAddress);
+      return tokenIds.map((id: bigint) => Number(id));
+    } catch (error) {
+      console.error('Error al obtener tokens del usuario:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Obtener el siguiente ID de token disponible
+   */
+  async getNextTokenId(): Promise<number> {
+    try {
+      const nextId = await this.contract.nextTokenId();
+      return Number(nextId);
+    } catch (error) {
+      console.error('Error al obtener nextTokenId:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Escuchar eventos de creación de tokens
+   * @param callback - Función que se ejecuta cuando se crea un token
+   */
+  onTokenCreated(callback: (
+    tokenId: number,
+    creator: string,
+    name: string,
+    totalSupply: number,
+    parentId: number,
+    features: string
+  ) => void) {
+    this.contract.on('TokenCreated', (
+      tokenId: bigint,
+      creator: string,
+      name: string,
+      totalSupply: bigint,
+      parentId: bigint,
+      features: string
+    ) => {
+      callback(
+        Number(tokenId),
+        creator,
+        name,
+        Number(totalSupply),
+        Number(parentId),
+        features
+      );
+    });
   }
 }

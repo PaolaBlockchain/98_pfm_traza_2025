@@ -547,4 +547,195 @@ contract SupplyChain {
         user.rol = newRole;
         emit UserRoleChanged(userAddress, id, newRole);
     }
+
+    // ============================================================
+    //                 TOKEN SYSTEM (MINI ERC-1155)
+    // ============================================================
+
+    // ---- Custom Errors Tokens ----
+    error TokenDoesNotExist();
+    error ZeroSupply();
+    error InvalidParent();
+    error RoleNotAllowedToCreateToken();
+    error CreatorNotApproved();
+
+    // ---- Token structure ----
+    struct Token {
+        uint256 id;
+        address creator;
+        string name;
+        uint256 totalSupply;
+        string features; // JSON con metadatos
+        uint256 parentId; // un solo parentId (versión básica)
+        uint256 dateCreated;
+        mapping(address => uint256) balance; // balances por usuario
+    }
+
+    // ---- Storage ----
+    uint256 public nextTokenId;
+    mapping(uint256 => Token) private tokens; // tokenId → Token
+    mapping(address => uint256[]) private tokensByUser; // usuario → ids
+
+    // ---- Eventos ----
+    event TokenCreated(
+        uint256 indexed tokenId,
+        address indexed creator,
+        string name,
+        uint256 totalSupply,
+        uint256 parentId,
+        string features
+    );
+
+
+    /**
+     * @notice a nivel tecnico: crea un token tipo mini-ERC1155.
+       A nivel de negocio: da de alta un producto/lote en la blockchain + da supply al creado
+     * @dev Reglas:
+     * - Solo usuarios Approved pueden crear
+     * - Admin NO puede crear
+     * - Producer crea tokens raíz (parentId = 0)
+     * - Factory y Retailer pueden usar parentId
+     */
+    function createToken(
+        string memory name,
+        uint256 totalSupply,
+        string memory features,
+        uint256 parentId
+    ) external {
+
+    //Parte A -> Validaciones (reglas de negocio)
+        // 1) Validar que el usuario esté registrado
+        uint256 userId = addressToUserId[msg.sender];
+        if (userId == 0) revert UserDoesNotExist();
+
+        User storage u = users[userId];
+
+        // 2) Validar que esté Approved
+        if (u.status != UserStatus.Approved) revert CreatorNotApproved();
+
+        // 3) Admin NO crea tokens
+        if (u.rol == Roles.Admin) revert RoleNotAllowedToCreateToken();
+
+        // 4) Validar supply
+        if (totalSupply == 0) revert ZeroSupply();
+
+        // 5) Validar parentId según el rol
+        if (parentId != 0) {
+            // Producer NO puede usar parentId
+            if (u.rol == Roles.Producer) revert InvalidParent();
+
+            // parentId debe existir
+            if (parentId > nextTokenId || parentId == 0) revert InvalidParent();
+        } else {
+            // Si es Factory o Retailer NO puede crear tokens raíz
+            if (u.rol != Roles.Producer) revert InvalidParent();
+        }
+        
+        //Parte B -> Creación real del token en storage
+
+        ++nextTokenId;
+        uint256 tokenId = nextTokenId;
+
+        Token storage t = tokens[tokenId];
+        t.id = tokenId;
+        t.creator = msg.sender;
+        t.name = name;
+        t.totalSupply = totalSupply;
+        t.features = features;
+        t.parentId = parentId;
+        t.dateCreated = block.timestamp;
+
+        // Asignar supply al creador
+        t.balance[msg.sender] = totalSupply;
+        tokensByUser[msg.sender].push(tokenId);
+
+        // Emitir evento
+        emit TokenCreated(
+            tokenId,
+            msg.sender,
+            name,
+            totalSupply,
+            parentId,
+            features
+        );
+    }
+
+    
+    /**
+     * @notice A nivel tenico, consulta los metadatos de un token. A nivel negocio, lee la ficha del producto. 
+       No mira balnces
+     * @dev Como no se puede retornar mappings, devolvemos solo campos simples.
+     */
+    function getToken(
+        uint256 tokenId
+    )
+        external
+        view
+        returns (
+            uint256 id,
+            address creator,
+            string memory name,
+            uint256 totalSupply,
+            string memory features,
+            uint256 parentId,
+            uint256 dateCreated
+        )
+    {
+        if (tokenId == 0 || tokenId > nextTokenId) revert TokenDoesNotExist();
+
+        Token storage t = tokens[tokenId];
+        return (
+            t.id,
+            t.creator,
+            t.name,
+            t.totalSupply,
+            t.features,
+            t.parentId,
+            t.dateCreated
+        );
+    }
+
+
+    /**
+     * @notice Devuelve cuántos tokens tiene un usuario. Aquí ya no miramos metadatos, sino cuántas unidades tiene alguien.
+     */
+    function getTokenBalance(
+        uint256 tokenId,
+        address user
+    ) external view returns (uint256) {
+        if (tokenId == 0 || tokenId > nextTokenId) revert TokenDoesNotExist();
+        return tokens[tokenId].balance[user];
+    }
+
+
+    /**
+     * @notice Devuelve una lista de tokenIds donde el usuario tiene balance > 0.
+      Es decir, qué productos tiene este usuario. En vez de preguntar "¿cuánto tiene de ESTE token?", 
+      preguntamos: ¿Qué tokens tiene este usuario en general?
+      Devuelve un array de tokenId (ej: [1, 3, 4]).
+     * @dev Itera sobre todos los tokens para encontrar aquellos donde el usuario tiene balance > 0.
+      Esto incluye tanto tokens creados por el usuario como tokens recibidos mediante transferencias.
+     */
+    function getUserTokens(
+        address user
+    ) external view returns (uint256[] memory) {
+        uint256[] memory result = new uint256[](nextTokenId);
+        uint256 count = 0;
+        
+        // Iterar sobre todos los tokens creados
+        for (uint256 i = 1; i <= nextTokenId; i++) {
+            if (tokens[i].balance[user] > 0) {
+                result[count] = i;
+                count++;
+            }
+        }
+        
+        // Redimensionar el array al tamaño real
+        uint256[] memory finalResult = new uint256[](count);
+        for (uint256 i = 0; i < count; i++) {
+            finalResult[i] = result[i];
+        }
+        
+        return finalResult;
+    }
 }

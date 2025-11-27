@@ -167,7 +167,7 @@ Write-Host ""
 Write-Host "PRÓXIMOS PASOS:" -ForegroundColor Yellow
 Write-Host "  1. Espera 10 segundos más a que Next.js compile" -ForegroundColor White
 Write-Host "  2. Abre Chrome en MODO INCÓGNITO (Ctrl+Shift+N)" -ForegroundColor White
-Write-Host "  3. Ve a: http://localhost:3000" -ForegroundColor White
+Write-Host "  3. Ve a: http://192.168.1.13:3000" -ForegroundColor White
 Write-Host "  4. Los usuarios deben conectar MetaMask y solicitar su rol" -ForegroundColor White
 Write-Host "  5. El admin (Account 0) debe aprobar las solicitudes" -ForegroundColor White
 Write-Host ""

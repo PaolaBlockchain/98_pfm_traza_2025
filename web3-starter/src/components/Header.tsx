@@ -19,6 +19,7 @@ export default function Header() {
   const { account, status, disconnect, connect, role } = useWallet();
   const router = useRouter();
   const isAdmin = status === 'approved' && !!account && role?.toLowerCase() === 'admin';
+  const isApproved = status === 'approved' && !!account;
 
   const shortenAddress = (address: string) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -29,7 +30,7 @@ export default function Header() {
   };
 
   const items: NavConfig[] = [
-  { href: '/dashboard', label: 'Dashboard', icon: Activity, visible: isAdmin },
+  { href: '/dashboard', label: 'Dashboard', icon: Activity, visible: isApproved },
   ];
 
   return (

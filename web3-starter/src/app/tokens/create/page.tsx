@@ -1,20 +1,20 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useWallet } from '@/hooks/useWallet';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { ContractService } from '@/lib/contractService';
 
 /**
- * Datos placeholder para selección de tokens padre
- * Representa tokens existentes que pueden usarse como referencias padre
- * en el sistema de trazabilidad de cadena de suministro
+ * Tipo para tokens disponibles como padres
  */
-const PARENT_PLACEHOLDER = [
-  { id: '1', name: 'Lote Materia Prima #1' },
-  { id: '2', name: 'Producto Intermedio #2' },
-];
+type ParentToken = {
+  id: number;
+  name: string;
+};
 
 /**
  * Componente CreateTokenPage - Interfaz de formulario de creación de tokens
@@ -42,12 +42,85 @@ const PARENT_PLACEHOLDER = [
  */
 export default function CreateTokenPage() {
   const { account, status, role } = useWallet();
+  const router = useRouter();
 
   // Gestión de estado del formulario para creación de tokens
   const [name, setName] = useState('');
   const [totalSupply, setTotalSupply] = useState('');
-  const [parentId, setParentId] = useState('');
-  const [features, setFeatures] = useState('');
+  const [parentId, setParentId] = useState('0');
+  const [features, setFeatures] = useState('{"lote":"A", "peso":"1kg"}');
+  
+  // Estados de UI
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [availableParents, setAvailableParents] = useState<ParentToken[]>([]);
+  const [loadingParents, setLoadingParents] = useState(true);
+
+  // Cargar tokens disponibles como padres
+  useEffect(() => {
+    async function loadParentTokens() {
+      if (!account) return;
+      
+      try {
+        const contractService = new ContractService();
+        const tokenIds = await contractService.getUserTokens(account);
+        
+        const tokens: ParentToken[] = [];
+        for (const id of tokenIds) {
+          try {
+            const token = await contractService.getToken(id);
+            tokens.push({
+              id: token.id,
+              name: token.name,
+            });
+          } catch (err) {
+            console.error(`Error al cargar token ${id}:`, err);
+          }
+        }
+        
+        setAvailableParents(tokens);
+      } catch (error) {
+        console.error('Error al cargar tokens padre:', error);
+      } finally {
+        setLoadingParents(false);
+      }
+    }
+
+    loadParentTokens();
+  }, [account]);
+
+  // Manejador de envío del formulario
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError('');
+    setIsSubmitting(true);
+
+    try {
+      // Validar JSON de features
+      let validatedFeatures = features;
+      try {
+        JSON.parse(features);
+      } catch {
+        throw new Error('Los metadatos deben ser un JSON válido');
+      }
+
+      const contractService = new ContractService();
+      await contractService.createToken(
+        name,
+        parseInt(totalSupply),
+        validatedFeatures,
+        parseInt(parentId)
+      );
+
+      alert('✅ Token creado exitosamente');
+      router.push('/tokens');
+    } catch (err: any) {
+      console.error('Error al crear token:', err);
+      setError(err.message || 'Error al crear el token');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   // Control de acceso: Requiere conexión de wallet
   if (!account) return <p>Conecta MetaMask para crear tokens.</p>;
@@ -57,17 +130,24 @@ export default function CreateTokenPage() {
 
   return (
     <section className="space-y-4">
-      {/* Encabezado de página con título y nota de desarrollo */}
+      {/* Encabezado de página con título y nota */}
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold">Crear token</h1>
         <p className="text-sm text-gray-600">
-          TODO: Enlazar este formulario con el contrato SupplyChain.sol cuando esté disponible.
+          Crea un nuevo token en la blockchain para trazabilidad de productos.
         </p>
       </header>
 
+      {/* Mostrar errores si los hay */}
+      {error && (
+        <div className="rounded-md bg-red-50 border border-red-300 p-4 text-sm text-red-700">
+          ❌ {error}
+        </div>
+      )}
+
       {/* Formulario de creación de tokens */}
       <Card>
-        <form className="space-y-4" onSubmit={(event) => event.preventDefault()}>
+        <form className="space-y-4" onSubmit={handleSubmit}>
           {/* Campo de entrada para nombre del token */}
           <div>
             <Label htmlFor="token-name">Nombre del token</Label>
@@ -99,14 +179,24 @@ export default function CreateTokenPage() {
           {/* Selección de token padre (opcional) */}
           <div>
             <Label htmlFor="token-parent">Token padre (opcional)</Label>
-            <Select id="token-parent" value={parentId} onChange={(event) => setParentId(event.target.value)}>
-              <option value="">— Selecciona —</option>
-              {PARENT_PLACEHOLDER.map((token) => (
+            <Select 
+              id="token-parent" 
+              value={parentId} 
+              onChange={(event) => setParentId(event.target.value)}
+              disabled={loadingParents || role === 'PRODUCER'}
+            >
+              <option value="0">
+                {role === 'PRODUCER' ? 'Sin padre (token raíz)' : '— Selecciona —'}
+              </option>
+              {availableParents.map((token) => (
                 <option key={token.id} value={token.id}>
                   {token.name}
                 </option>
               ))}
             </Select>
+            {loadingParents && (
+              <p className="text-xs text-gray-500 mt-1">Cargando tokens disponibles...</p>
+            )}
           </div>
 
           {/* Campo de entrada para metadatos JSON */}
@@ -122,19 +212,43 @@ export default function CreateTokenPage() {
           </div>
 
           {/* Botón de envío con validación */}
-          <Button type="submit" disabled={!name || !totalSupply}>
-            Registrar token
+          <Button 
+            type="submit" 
+            disabled={!name || !totalSupply || isSubmitting}
+          >
+            {isSubmitting ? 'Creando token...' : 'Registrar token'}
           </Button>
         </form>
       </Card>
 
-      {/* Lista de verificación para integración con smart contract */}
+      {/* Lista de verificación según rol */}
       <article className="rounded border bg-white p-4 text-sm text-gray-600">
         <h2 className="mb-2 text-base font-semibold">Lista de verificación</h2>
-        <ul className="list-disc space-y-1 pl-5">
-          <li>Validar permisos por rol (Producer, Factory, Retailer).</li>
-          <li>Construir metadata JSON dinámicamente.</li>
-          <li>Invocar `createToken` del contrato y mostrar feedback.</li>
+        <ul className="space-y-2">
+          <li className="flex items-start gap-2">
+            <span className={account ? 'text-green-600' : 'text-gray-400'}>✓</span>
+            <span className={account ? 'line-through text-gray-400' : ''}>Wallet conectada</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className={status === 'approved' ? 'text-green-600' : 'text-gray-400'}>✓</span>
+            <span className={status === 'approved' ? 'line-through text-gray-400' : ''}>Cuenta aprobada</span>
+          </li>
+          {role === 'PRODUCER' && (
+            <li className="flex items-start gap-2">
+              <span className="text-blue-600">ℹ</span>
+              <span>Producer: Puedes crear tokens raíz (sin padre)</span>
+            </li>
+          )}
+          {(role === 'FACTORY' || role === 'RETAILER') && (
+            <li className="flex items-start gap-2">
+              <span className="text-blue-600">ℹ</span>
+              <span>{role}: Debes seleccionar un token padre</span>
+            </li>
+          )}
+          <li className="flex items-start gap-2">
+            <span className="text-blue-600">ℹ</span>
+            <span>Los metadatos deben ser JSON válido</span>
+          </li>
         </ul>
       </article>
 

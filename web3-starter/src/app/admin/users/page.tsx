@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useWallet } from '@/hooks/useWallet';
+import { useToast } from '@/components/ui/toast';
 import { UserTable, type UserRow } from '@/components/UserTable';
 import { ContractService } from '@/lib/contractService';
 import { RequestHistoryService } from '@/lib/requestHistoryService';
@@ -27,7 +28,8 @@ import { RequestHistoryService } from '@/lib/requestHistoryService';
  * @returns {JSX.Element} El componente de página de gestión de usuarios administrativos
  */
 export default function AdminUsersPage() {
-  const { account, status } = useWallet();
+  const { account, status, role } = useWallet();
+  const { showToast } = useToast();
 
   // Estado de usuarios registrados en el contrato
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -41,8 +43,8 @@ export default function AdminUsersPage() {
    * Se ejecuta al montar el componente y limpia listeners al desmontar
    */
   useEffect(() => {
-    // Solo ejecutar si hay cuenta conectada y está aprobada
-    if (!account || status !== 'approved') return;
+    // Solo ejecutar si hay cuenta conectada, está aprobada y es ADMIN
+    if (!account || status !== 'approved' || !role || role.toUpperCase() !== 'ADMIN') return;
 
     const loadUsers = async () => {
       try {
@@ -61,12 +63,15 @@ export default function AdminUsersPage() {
         for (const address of userAddresses) {
           try {
             const userInfo = await contractService.getUserInfo(address);
-            loadedUsers.push({
-              id: address,
-              address: address,
-              role: getRoleName(userInfo.role),
-              status: getStatusName(userInfo.status),
-            });
+            // Filtrar el admin: no mostrar usuarios con rol ADMIN (0)
+            if (userInfo.role !== 0) {
+              loadedUsers.push({
+                id: address,
+                address: address,
+                role: getRoleName(userInfo.role),
+                status: getStatusName(userInfo.status),
+              });
+            }
           } catch (error) {
             console.log(`Usuario ${address} no encontrado en contrato`);
           }
@@ -78,6 +83,12 @@ export default function AdminUsersPage() {
         // Escuchar evento UserRegistered para nuevos registros Y re-solicitudes
         contractService.onUserRegistered((userAddress, id, role, userStatus) => {
           console.log(`🔔 Admin recibió evento UserRegistered:`, userAddress, getRoleName(role), getStatusName(userStatus));
+          
+          // Filtrar el admin: no mostrar usuarios con rol ADMIN (0)
+          if (role === 0) {
+            console.log(`🚫 Ignorando evento de admin: ${userAddress}`);
+            return;
+          }
           
           const newUser: UserRow = {
             id: userAddress,
@@ -147,13 +158,27 @@ export default function AdminUsersPage() {
     };
 
     loadUsers();
-  }, [account, status]);
+  }, [account, status, role]);
 
   // Control de acceso: Requiere conexión de wallet
   if (!account) return <p>Conecta MetaMask para gestionar usuarios.</p>;
 
   // Control de acceso: Requiere estado de registro aprobado
   if (status !== 'approved') return <p>Solo cuentas aprobadas pueden ver esta sección.</p>;
+
+  // Control de acceso: Requiere rol ADMIN
+  if (!role || role.toUpperCase() !== 'ADMIN') {
+    return (
+      <section className="space-y-4">
+        <div className="rounded-md bg-yellow-50 border border-yellow-300 p-6">
+          <p className="text-sm text-yellow-800">
+            Por favor presione el Dashboard si quieres ingresar al rol o Desconectar si quieres ingresar con otro rol.
+          </p>
+          <p className="text-sm text-yellow-800 mt-2">Tu rol actual: {role || 'sin definir'}</p>
+        </div>
+      </section>
+    );
+  }
 
   /**
    * Maneja la acción de aprobación de usuario
@@ -170,11 +195,29 @@ export default function AdminUsersPage() {
       // El historial se registrará automáticamente via evento UserStatusChanged
       // El re-render también se activará automáticamente
     } catch (error: unknown) {
-      console.error('Error al aprobar usuario:', error);
+      // Detectar si el usuario canceló la transacción en MetaMask
       if (error instanceof Error) {
-        alert(`Error al aprobar: ${error.message}`);
+        const errorMessage = error.message.toLowerCase();
+        const errorCode = (error as any)?.code;
+        
+        if (
+          errorCode === 4001 ||
+          errorCode === 'ACTION_REJECTED' ||
+          errorMessage.includes('user denied') ||
+          errorMessage.includes('user rejected') ||
+          errorMessage.includes('rejected')
+        ) {
+          // El usuario canceló la transacción, mostrar toaster
+          showToast('El usuario ha cancelado la solicitud desde MetaMask', 'warning');
+          return;
+        }
+        
+        // Para otros errores, sí mostrar el mensaje
+        console.error('Error al aprobar usuario:', error);
+        showToast(`Error al aprobar: ${error.message}`, 'error');
       } else {
-        alert('Error desconocido al aprobar usuario');
+        console.error('Error desconocido al aprobar usuario:', error);
+        showToast('Error desconocido al aprobar usuario', 'error');
       }
     }
   };
@@ -194,11 +237,29 @@ export default function AdminUsersPage() {
       // El historial se registrará automáticamente via evento UserStatusChanged
       // El re-render también se activará automáticamente
     } catch (error: unknown) {
-      console.error('Error al rechazar usuario:', error);
+      // Detectar si el usuario canceló la transacción en MetaMask
       if (error instanceof Error) {
-        alert(`Error al rechazar: ${error.message}`);
+        const errorMessage = error.message.toLowerCase();
+        const errorCode = (error as any)?.code;
+        
+        if (
+          errorCode === 4001 ||
+          errorCode === 'ACTION_REJECTED' ||
+          errorMessage.includes('user denied') ||
+          errorMessage.includes('user rejected') ||
+          errorMessage.includes('rejected')
+        ) {
+          // El usuario canceló la transacción, mostrar toaster
+          showToast('El usuario ha cancelado la solicitud desde MetaMask', 'warning');
+          return;
+        }
+        
+        // Para otros errores, sí mostrar el mensaje
+        console.error('Error al rechazar usuario:', error);
+        showToast(`Error al rechazar: ${error.message}`, 'error');
       } else {
-        alert('Error desconocido al rechazar usuario');
+        console.error('Error desconocido al rechazar usuario:', error);
+        showToast('Error desconocido al rechazar usuario', 'error');
       }
     }
   };

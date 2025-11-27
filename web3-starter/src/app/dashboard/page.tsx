@@ -155,7 +155,7 @@ export default function DashboardPage() {
             </Link>
 
             {/* Enlace al panel de administración (solo para admins) */}
-            {role?.toLowerCase() === 'admin' && (
+            {role && role.toUpperCase() === 'ADMIN' && (
               <Link href="/admin/users" className="group flex flex-col gap-3 rounded-xl border border-gray-200/80 bg-white px-5 py-6 shadow-sm transition-all duration-300 hover:-translate-y-[1px] hover:shadow-md">
                 <p className="font-mono text-xs uppercase tracking-[0.32em] text-gray-600">Administración de Usuarios</p>
                 <p className="text-xs leading-relaxed text-gray-600">Panel de administración</p>
