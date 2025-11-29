@@ -3,20 +3,31 @@ pragma solidity ^0.8.20;
 
 /**
  * @title SupplyChainHelper
- * @dev Helper puro/reutilizable para reglas de negocio que no dependen de storage.
- * Usa uint8 para no acoplarse a enums específicos de otro contrato.
+ * @notice Helper puro/reutilizable para reglas de negocio que NO dependen de storage.
  *
- * Convenciones esperadas:
- * - UserStatus: 0=Pending, 1=Approved, 2=Rejected, 3=Canceled
- * - Roles:      0=Admin,   1=Producer, 2=Factory, 3=Retailer, 4=Consumer
+ * @dev Este contrato asume las siguientes convenciones en el contrato principal:
+ * - UserStatus: 0 = Pending, 1 = Approved, 2 = Rejected, 3 = Canceled
+ * - Roles:      0 = Admin,   1 = Producer, 2 = Factory, 3 = Retailer, 4 = Consumer
+ *
+ * La idea es separar:
+ * - La lógica de máquina de estados y validaciones simples (aquí, funciones pure)
+ * - Del almacenamiento real y la lógica de acceso (en el contrato SupplyChain)
  */
 library SupplyChainHelper {
-    /// @notice Valida si es válida la transición de estado (from → to)
-    /// @param from  Código uint8 del estado actual
-    /// @param to    Código uint8 del estado destino
+    /**
+     * @notice Valida si es válida la transición de estado (from → to)
+     * @dev Máquina de estados para usuarios:
+     * - Pending (0)  → Approved (1) / Rejected (2) / Canceled (3)
+     * - Approved (1) → Canceled (3)
+     * - Rejected (2) → No permite cambiar (versión simple)
+     * - Canceled (3) → Estado terminal
+     *
+     * @param from Código uint8 del estado actual
+     * @param to   Código uint8 del estado destino
+     * @return bool true si la transición está permitida, false en caso contrario
+     */
     function canTransition(uint8 from, uint8 to) internal pure returns (bool) {
         // Pending -> Approved / Rejected / Canceled
-        // Solo usuarios Pending pueden cancelar su solicitud
         if (from == 0) {
             return (to == 1 || to == 2 || to == 3);
         }
@@ -24,7 +35,7 @@ library SupplyChainHelper {
         if (from == 1) {
             return (to == 3);
         }
-        // Rejected -> NO puede cancelar (debe esperar a volver a solicitar)
+        // Rejected -> no cambia en esta versión
         if (from == 2) {
             return false;
         }
@@ -35,10 +46,54 @@ library SupplyChainHelper {
         return false;
     }
 
-    /// @notice Impide que se solicite Admin desde la UI
-    /// @param roleId Código uint8 del rol solicitado
-    /// @dev 0 = Admin (no permitido en request de usuario)
+    /**
+     * @notice Indica si un rol NO es Admin (es decir, si es un rol "público" permitido).
+     * @dev Se usa en el contrato principal para:
+     * - Bloquear que un usuario se auto-asigne Admin desde la UI.
+     * - Impedir que ciertas operaciones se apliquen sobre el Admin.
+     *
+     * @param roleId Código uint8 del rol solicitado
+     * @return bool true si el rol NO es Admin (0), false si es Admin
+     */
     function isAllowedNonAdminRole(uint8 roleId) internal pure returns (bool) {
-        return roleId != 0; // 0 = Roles.Admin
+        // 0 = Roles.Admin → no permitido para requests públicos
+        return roleId != 0;
+    }
+
+    /**
+     * @notice Valida si la combinación de rol y parentId es válida para crear un token.
+     * @dev Reglas de negocio:
+     * - Si parentId == 0: Solo Producer (1) puede crear tokens raíz
+     * - Si parentId != 0: Producer NO puede usar parentId, y el parentId debe existir
+     *
+     * @param roleId Código uint8 del rol (0=Admin, 1=Producer, 2=Factory, 3=Retailer, 4=Consumer)
+     * @param parentId ID del token padre (0 = token raíz)
+     * @param nextTokenId Siguiente ID de token disponible (para validar existencia del parentId)
+     * @return bool true si la combinación es válida, false en caso contrario
+     */
+    function isValidTokenParent(
+        uint8 roleId,
+        uint256 parentId,
+        uint256 nextTokenId
+    ) internal pure returns (bool) {
+        // Si es token raíz (parentId == 0)
+        if (parentId == 0) {
+            // Solo Producer puede crear tokens raíz
+            return roleId == 1; // 1 = Producer
+        }
+
+        // Si tiene parentId (parentId != 0)
+        // Producer NO puede usar parentId
+        if (roleId == 1) {
+            return false; // Producer no puede usar parentId
+        }
+
+        // El parentId debe existir (debe ser <= nextTokenId y > 0)
+        if (parentId > nextTokenId || parentId == 0) {
+            return false;
+        }
+
+        // Factory, Retailer pueden usar parentId válido
+        return true;
     }
 }
