@@ -1,33 +1,16 @@
+# 02_PROYECTO_IMPLEMENTADO_Y_ANALISIS
+
 # 🔗 Supply Chain Tracker - Proyecto de Desarrollo Blockchain
 
 ## 🚀 Inicio Rápido
 
-```powershell
-# 1. Clonar el repositorio
-git clone <url-repo>
-cd 98_pfm_traza_2025
-
-# 2. Instalar dependencias del frontend
-cd web3-starter
-npm install
-cd ..
-
-# 3. Iniciar el sistema completo
-.\RESTART-ALL.ps1
-
-# 4. Esperar ~40 segundos
-# 5. Conectar como ADMIN y aprobar usuarios
-# 6. http://localhost:3000
-```
-
-**IMPORTANTE:** Los usuarios de prueba se registran automáticamente pero están en estado **PENDING**. El admin debe aprobarlos desde la interfaz web en `/admin/users`.
+Para iniciar el sistema rápidamente, se ha creado una guía técnica detallada con todos los pasos de instalación y configuración. Consulta **[03_GUIA_TECNICA_INSTALACION.md](./03_GUIA_TECNICA_INSTALACION.md)** para mayor detalle sobre cómo levantar el sistema completo.
 
 ### 📖 Documentación Disponible
 
-- **[GUIA_TESTING.md](./GUIA_TESTING.md)** - Cómo probar el sistema con usuarios de prueba
-- **[HISTORIAL_SOLICITUDES.md](./HISTORIAL_SOLICITUDES.md)** - Sistema de historial de solicitudes
-- **[PLAN_INTEGRACION.md](./PLAN_INTEGRACION.md)** - Plan de integración de funcionalidades
-- **[CASOS_DE_USO.md](./CASOS_DE_USO.md)** - Casos de uso del sistema
+- **[CASOS_DE_USO.md](./CASOS_DE_USO.md)** - Casos de uso del sistema, pruebas y errores documentados
+- **[01_PROYECTO_A_IMPLEMENTAR.md](./01_PROYECTO_A_IMPLEMENTAR.md)** - Especificaciones del proyecto a implementar
+- **[03_GUIA_TECNICA_INSTALACION.md](./03_GUIA_TECNICA_INSTALACION.md)** - Guía técnica de instalación
 
 ---
 
@@ -100,191 +83,12 @@ Implementacion de referencia. (url )
 
 ## 🛠️ Prerequisitos e Instalación
 
-### 📋 Requisitos del Sistema
+Para información detallada sobre prerequisitos, instalación y configuración del sistema, consulta la **[Guía Técnica de Instalación](./03_GUIA_TECNICA_INSTALACION.md)**:
 
-Antes de comenzar, asegúrate de tener instalado:
-
-1. **Node.js** (versión 18 o superior)
-   ```bash
-   # Verificar versión
-   node --version
-   npm --version
-   ```
-
-2. **Git**
-   ```bash
-   git --version
-   ```
-
-3. **Foundry** (para smart contracts)
-   ```bash
-   # Instalar Foundry
-   curl -L https://foundry.paradigm.xyz | bash
-   foundryup
-
-   # Verificar instalación
-   forge --version
-   anvil --version
-   ```
-
-4. **MetaMask Browser Extension**
-   - Instalar desde [metamask.io](https://metamask.io/)
-   - Crear una wallet de prueba
-
-### 🔧 Configuración del Entorno
-
-#### 1. **Clonar el Repositorio**
-```bash
-git clone 98_pfm_traza_2025
-
-cd supply-chain-tracker
-```
-
-#### 2. **Configurar Smart Contracts (`sc/`)**
-```bash
-cd sc
-
-# Instalar dependencias de Foundry
-forge install
-
-# Compilar contratos
-forge build
-
-# Ejecutar tests (opcional pero recomendado)
-forge test
-
-# Verificar que todo funciona
-ls out/  # Debe mostrar archivos compilados
-```
-
-#### 3. **Configurar Frontend (`web/`)**
-```bash
-npx create-next-app@latest web --typescript 
-
-cd ../web
-
-# Instalar dependencias de Node.js
-npm install
-
-# Verificar que no hay errores
-npm run build
-```
-
-#### 4. **Configurar Blockchain Local**
-
-**Terminal 1 - Ejecutar Anvil:**
-```bash
-# Iniciar blockchain local
-anvil
-
-# Copiar las private keys que aparecen
-# Ejemplo de salida:
-# Account #0: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
-# Private Key: 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
-```
-
-**Terminal 2 - Desplegar Contrato:**
-```bash
-cd sc
-
-# Desplegar contrato (usa una private key de Anvil)
-forge script script/Deploy.s.sol \
-  --rpc-url http://localhost:8545 \
-  --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
-  --broadcast
-
-# Copiar la dirección del contrato desplegado
-```
-
-#### 5. **Configurar MetaMask**
-
-1. **Agregar Red Local:**
-   - Network Name: `Anvil Local`
-   - RPC URL: `http://localhost:8545`
-   - Chain ID: `31337`
-   - Currency Symbol: `ETH`
-
-2. **Importar Cuentas de Prueba:**
-   - Importar private keys de Anvil para testing
-   - Recomendado: al menos 4 cuentas diferentes (
-   ```
-      admin (0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266), 
-      producer (0x70997970C51812dc3A010C7d01b50e0d17dc79C8), 
-      factory (0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC), 
-      retailer (0x90F79bf6EB2c4f870365E785982E1f101E93b906), 
-      consumer (0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65))
-   ```
-
-#### 6. **Actualizar Configuración**
-
-**Archivo: `web/src/contracts/config.ts`**
-```typescript
-export const CONTRACT_CONFIG = {
-  address: "0x...", // Dirección del contrato desplegado
-  abi: SupplyChainABI,
-  adminAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" // Primera cuenta de Anvil
-};
-```
-
-#### 7. **Iniciar Aplicación**
-```bash
-cd web
-
-# Modo desarrollo
-npm run dev
-
-# Abrir http://localhost:3000
-```
-
----
-
-## 🛠️ Configuración de variables de entorno
-
-Para que el sistema funcione correctamente, debes configurar las variables de entorno siguiendo estos pasos:
-
-1. **Copia el archivo de ejemplo:**
-   - Ve a la carpeta `web3-starter`.
-   - Copia el archivo `.env.example` y renómbralo como `.env`.
-   - Ejemplo:
-     ```powershell
-     cp web3-starter\.env.example web3-starter\.env
-     ```
-
-2. **Edita el archivo `.env`:**
-   - Abre `web3-starter/.env` y revisa las variables:
-     - `NEXT_PUBLIC_RPC_URL`: URL de la red blockchain (por defecto: `http://localhost:8545`)
-     - `NEXT_PUBLIC_CHAIN_ID`: Chain ID de la red (por defecto: `31337`)
-     - `NEXT_PUBLIC_CONTRACT_ADDRESS`: Dirección del contrato desplegado (actualízala si el script de despliegue la cambia)
-   - No pongas datos sensibles en este archivo, solo los valores necesarios para tu entorno local.
-
----
-
-## 🏁 Pasos para levantar el sistema (modo fácil)
-
-1. **Clona el repositorio:**
-   ```powershell
-   git clone <url-repo>
-   cd 98_pfm_traza_2025
-   ```
-2. **Instala dependencias del frontend:**
-   ```powershell
-   cd web3-starter
-   npm install
-   cd ..
-   ```
-3. **Ejecuta el script de reinicio completo:**
-   ```powershell
-   .\RESTART-ALL.ps1
-   ```
-   - Este script detiene procesos previos, limpia caché, despliega el contrato y arranca todo automáticamente.
-   - Espera ~40 segundos a que termine.
-
-4. **Abre la aplicación en tu navegador:**
-   - Ve a [http://localhost:3000](http://localhost:3000)
-   - Usa modo incógnito si tienes problemas con MetaMask o localStorage.
-
-5. **Conecta tu wallet y solicita un rol:**
-   - El admin debe aprobar usuarios desde `/admin/users`.
+- **[📋 Requisitos para configurar el Sistema](./03_GUIA_TECNICA_INSTALACION.md#-requisitos-para-configurar-el-sistema)** - Node.js, Git, Foundry, MetaMask
+- **[🔧 Configuración del Entorno](./03_GUIA_TECNICA_INSTALACION.md#-configuración-del-entorno)** - Clonar repositorio, configurar smart contracts, frontend, variables de entorno y MetaMask
+- **[🏁 Instalación Completa (Primera Vez)](./03_GUIA_TECNICA_INSTALACION.md#-instalación-completa-primera-vez)** - Guía paso a paso para primera instalación
+- **[🚀 Inicio Rápido](./03_GUIA_TECNICA_INSTALACION.md#-inicio-rápido)** - Comandos rápidos para usuarios experimentados
 
 ---
 

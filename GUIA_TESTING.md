@@ -32,83 +32,17 @@ Este script hace:
 
 ## 🎯 Casos de Prueba
 
-### Caso 0: Aprobar Usuarios de Prueba (OBLIGATORIO PRIMERO)
-
-1. Abre Chrome en **modo incógnito** (Ctrl+Shift+N)
-2. Ve a `http://localhost:3000`
-3. Conecta MetaMask con **Account 0** (ADMIN)
-4. Ve a `/admin/users`
-5. **Aprueba cada usuario** (PRODUCER, FACTORY, RETAILER, CONSUMER)
-6. Verás el historial registrándose automáticamente
-7. **Resultado esperado:**
-   - ✅ 4 usuarios aprobados
-   - ✅ Historial visible con acciones "requested" y "approved"
-
-### Caso 1: Conectar como PRODUCER (Usuario Aprobado)
-
-**Requisito:** Debes haber completado el Caso 0 primero
-
-1. Desconecta la wallet del admin
-2. Conecta MetaMask con **Account 1** (PRODUCER)
-3. **Resultado esperado:**
-   - ✅ La página te redirige a `/dashboard`
-   - ✅ Ves tu información: cuenta, rol PRODUCER, estado "approved"
-   - ✅ Tienes acceso a "Tokens" y "Transferencias"
-   - ❌ NO ves "Acceso limitado"
-
-### Caso 2: Conectar como Usuario No Aprobado
-
-**Requisito:** NO aprobar al FACTORY en el Caso 0
-
-1. Conecta MetaMask con **Account 2** (FACTORY)
-2. **Resultado esperado:**
-   - ⚠️ Mensaje: "Acceso limitado - Tu cuenta aún no tiene permisos"
-   - ℹ️ El usuario debe esperar aprobación del admin
-
-### Caso 3: Conectar como ADMIN
-
-1. Conecta MetaMask con **Account 0** (ADMIN)
-2. **Resultado esperado:**
-   - ✅ Dashboard completo
-   - ✅ Acceso adicional a `/admin/users`
-   - ✅ Puede ver y gestionar todos los usuarios
-   - ✅ Puede aprobar/rechazar usuarios pendientes
-
-### Caso 4: Registrar un Nuevo Usuario (Flujo Completo)
-
-#### Paso 1: Solicitar Registro
-1. Conecta MetaMask con **Account 5** (o cualquier cuenta no registrada)
-2. La app mostrará: "No estás registrado"
-3. Selecciona un rol (ej: PRODUCER)
-4. Haz clic en "Solicitar Registro"
-5. **Resultado:**
-   - ✅ Estado cambia a "pending"
-   - ⚠️ Mensaje: "Acceso limitado - Espera aprobación del admin"
-
-#### Paso 2: Aprobar como Admin
-1. Desconecta la wallet en MetaMask
-2. Conecta con **Account 0** (ADMIN)
-3. Ve a `/admin/users`
-4. Busca al nuevo usuario (Account 5)
-5. Haz clic en "Aprobar"
-6. Confirma la transacción en MetaMask
-
-#### Paso 3: Verificar Acceso
-1. Desconecta el admin
-2. Vuelve a conectar con **Account 5**
-3. Recarga la página
-4. **Resultado:**
-   - ✅ Ahora ves el dashboard completo
-   - ✅ Estado: "approved"
-
-### Caso 5: Rechazar un Usuario (Flujo de Rechazo)
-
-1. Registra un nuevo usuario (Account 6)
-2. Como admin, **rechaza** al usuario
-3. Vuelve a conectar con Account 6
-4. **Resultado:**
-   - ❌ Mensaje: "Solicitud Rechazada"
-   - ℹ️ Opción para realizar nueva solicitud
+> **Nota:** Los casos de prueba detallados han sido movidos a `CASOS_DE_USO.md` (Secciones 12-17).
+> 
+> Para ver los casos de prueba completos, incluyendo:
+> - Casos de prueba de usuarios (Sección 12)
+> - Casos de uso de tokens (Sección 13)
+> - Casos de uso de transferencias (Sección 14)
+> - Casos de uso de trazabilidad (Sección 15)
+> - Errores y soluciones (Sección 16)
+> - Checklist completo de testing (Sección 17)
+>
+> Consulta el archivo `CASOS_DE_USO.md`.
 
 ## 🐛 Debugging
 
