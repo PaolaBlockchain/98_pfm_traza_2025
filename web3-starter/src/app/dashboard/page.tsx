@@ -142,17 +142,21 @@ export default function DashboardPage() {
           <h2 className="font-mono text-[0.65rem] uppercase tracking-[0.4em] text-gray-400 mb-4">Resumen de Misión</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
 
-            {/* Enlace al módulo de tokens */}
-            <Link href="/tokens" className="group flex flex-col gap-3 rounded-xl border border-gray-200/80 bg-white px-5 py-6 shadow-sm transition-all duration-300 hover:-translate-y-[1px] hover:shadow-md">
-              <p className="font-mono text-xs uppercase tracking-[0.32em] text-gray-600">Tokens</p>
-              <p className="text-xs leading-relaxed text-gray-600">Gestiona el inventario de tokens</p>
-            </Link>
+            {/* Enlace al módulo de tokens (Admin no puede crear tokens) */}
+            {role && role.toUpperCase() !== 'ADMIN' && (
+              <Link href="/tokens" className="group flex flex-col gap-3 rounded-xl border border-gray-200/80 bg-white px-5 py-6 shadow-sm transition-all duration-300 hover:-translate-y-[1px] hover:shadow-md">
+                <p className="font-mono text-xs uppercase tracking-[0.32em] text-gray-600">Tokens</p>
+                <p className="text-xs leading-relaxed text-gray-600">Gestiona el inventario de tokens</p>
+              </Link>
+            )}
 
-            {/* Enlace al módulo de transferencias */}
-            <Link href="/transfers" className="group flex flex-col gap-3 rounded-xl border border-gray-200/80 bg-white px-5 py-6 shadow-sm transition-all duration-300 hover:-translate-y-[1px] hover:shadow-md">
-              <p className="font-mono text-xs uppercase tracking-[0.32em] text-gray-600">Transferencias</p>
-              <p className="text-xs leading-relaxed text-gray-600">Ver y gestionar transferencias</p>
-            </Link>
+            {/* Enlace al módulo de transferencias (Admin y Consumer no pueden hacer transferencias) */}
+            {role && role.toUpperCase() !== 'ADMIN' && role.toUpperCase() !== 'CONSUMER' && (
+              <Link href="/transfers" className="group flex flex-col gap-3 rounded-xl border border-gray-200/80 bg-white px-5 py-6 shadow-sm transition-all duration-300 hover:-translate-y-[1px] hover:shadow-md">
+                <p className="font-mono text-xs uppercase tracking-[0.32em] text-gray-600">Transferencias</p>
+                <p className="text-xs leading-relaxed text-gray-600">Ver y gestionar transferencias</p>
+              </Link>
+            )}
 
             {/* Enlace al panel de administración (solo para admins) */}
             {role && role.toUpperCase() === 'ADMIN' && (

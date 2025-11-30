@@ -89,8 +89,13 @@ export default function Header() {
         {/* Sección derecha: botón conectar/desconectar */}
         <div className="flex items-center flex-shrink-0">
           {!account && (
-            <button onClick={connect} className={`${navClass} border-blue-300/90 bg-blue-50/90 text-blue-600 hover:border-blue-400 hover:text-blue-700`}>
-              <span>Conectar a MetaMask</span>
+            <button 
+              onClick={connect} 
+              className="group flex items-center gap-2 rounded-md border-2 border-blue-500 bg-gradient-to-r from-blue-500 to-indigo-600 px-4 py-2.5 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl animate-pulse-flash"
+            >
+              <span className="relative">
+                🔗 Conectar a MetaMask
+              </span>
             </button>
           )}
           {account && (

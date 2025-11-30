@@ -238,6 +238,56 @@ npm run dev
 
 ---
 
+## 🛠️ Configuración de variables de entorno
+
+Para que el sistema funcione correctamente, debes configurar las variables de entorno siguiendo estos pasos:
+
+1. **Copia el archivo de ejemplo:**
+   - Ve a la carpeta `web3-starter`.
+   - Copia el archivo `.env.example` y renómbralo como `.env`.
+   - Ejemplo:
+     ```powershell
+     cp web3-starter\.env.example web3-starter\.env
+     ```
+
+2. **Edita el archivo `.env`:**
+   - Abre `web3-starter/.env` y revisa las variables:
+     - `NEXT_PUBLIC_RPC_URL`: URL de la red blockchain (por defecto: `http://localhost:8545`)
+     - `NEXT_PUBLIC_CHAIN_ID`: Chain ID de la red (por defecto: `31337`)
+     - `NEXT_PUBLIC_CONTRACT_ADDRESS`: Dirección del contrato desplegado (actualízala si el script de despliegue la cambia)
+   - No pongas datos sensibles en este archivo, solo los valores necesarios para tu entorno local.
+
+---
+
+## 🏁 Pasos para levantar el sistema (modo fácil)
+
+1. **Clona el repositorio:**
+   ```powershell
+   git clone <url-repo>
+   cd 98_pfm_traza_2025
+   ```
+2. **Instala dependencias del frontend:**
+   ```powershell
+   cd web3-starter
+   npm install
+   cd ..
+   ```
+3. **Ejecuta el script de reinicio completo:**
+   ```powershell
+   .\RESTART-ALL.ps1
+   ```
+   - Este script detiene procesos previos, limpia caché, despliega el contrato y arranca todo automáticamente.
+   - Espera ~40 segundos a que termine.
+
+4. **Abre la aplicación en tu navegador:**
+   - Ve a [http://localhost:3000](http://localhost:3000)
+   - Usa modo incógnito si tienes problemas con MetaMask o localStorage.
+
+5. **Conecta tu wallet y solicita un rol:**
+   - El admin debe aprobar usuarios desde `/admin/users`.
+
+---
+
 ## 🚀 Funcionalidades a Implementar
 
 ### 🔐 **Sistema de Autenticación Web3**

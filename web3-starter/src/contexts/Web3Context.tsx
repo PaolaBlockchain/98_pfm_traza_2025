@@ -57,6 +57,14 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
     const savedRole = window.localStorage.getItem(STORAGE_KEYS.role) || '';
     const savedStatus = parseStoredStatus(window.localStorage.getItem(STORAGE_KEYS.status));
 
+    // Si no hay cuenta almacenada, resetear todo el estado
+    if (!savedAccount) {
+      setAccount(null);
+      setStatus('unregistered');
+      setRole('');
+      return;
+    }
+
     if (savedAccount) setAccount(savedAccount);
     setRole(savedRole);
     setStatus(savedStatus);
@@ -218,9 +226,13 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
 
       const newAccount = accounts[0];
       if (newAccount !== account) {
+        const previousAccount = account;
         setAccount(newAccount);
         
         // Consultar el rol del nuevo usuario desde el contrato
+        let newRole = '';
+        let newStatus: RegistrationStatus = 'unregistered';
+        
         try {
           const contractService = new ContractService();
           
@@ -244,16 +256,40 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
           const isAdmin = newAccount.toLowerCase() === ADMIN_ADDRESS.toLowerCase();
           
           if (isAdmin) {
-            setRole('ADMIN');
-            setStatus('approved');
+            newRole = 'ADMIN';
+            newStatus = 'approved';
           } else {
             // Usar getUserInfo en lugar de getUser
             const userInfo = await contractService.getUserInfo(newAccount);
-            const contractRole = roleMap[userInfo.role] || '';
-            const contractStatus = statusMap[userInfo.status] || 'unregistered';
-            
-            setRole(contractRole);
-            setStatus(contractStatus);
+            newRole = roleMap[userInfo.role] || '';
+            newStatus = statusMap[userInfo.status] || 'unregistered';
+          }
+          
+          setRole(newRole);
+          setStatus(newStatus);
+          
+          // Si cambió la cuenta o el rol, redirigir al dashboard para evitar confusión
+          // Solo redirigir si había una cuenta anterior (no es la primera conexión)
+          if (previousAccount && typeof window !== 'undefined') {
+            const currentPath = window.location.pathname;
+            // No redirigir si ya estamos en dashboard, admin/users, o en la página principal
+            if (currentPath !== '/dashboard' && 
+                currentPath !== '/admin/users' && 
+                currentPath !== '/') {
+              console.log('🔄 Cuenta o rol cambiado desde MetaMask, redirigiendo al dashboard...');
+              // Usar setTimeout para asegurar que el estado se actualice primero
+              setTimeout(() => {
+                if (newStatus === 'approved' && newRole) {
+                  if (newRole === 'ADMIN') {
+                    window.location.href = '/admin/users';
+                  } else {
+                    window.location.href = '/dashboard';
+                  }
+                } else {
+                  window.location.href = '/';
+                }
+              }, 500);
+            }
           }
         } catch (error: any) {
           // Silenciar errores esperados (usuario no registrado)
@@ -266,6 +302,16 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
           }
           setRole('');
           setStatus('unregistered');
+          
+          // Si cambió la cuenta y el usuario no está registrado, redirigir a la página principal
+          if (previousAccount && typeof window !== 'undefined') {
+            const currentPath = window.location.pathname;
+            if (currentPath !== '/') {
+              setTimeout(() => {
+                window.location.href = '/';
+              }, 500);
+            }
+          }
         }
         
         setManuallyDisconnected(false);

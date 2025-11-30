@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useWallet } from '@/hooks/useWallet';
 import { Button } from '@/components/ui/button';
 import { TokenCard } from '@/components/TokenCard';
@@ -40,10 +41,31 @@ type TokenData = {
  * @returns {JSX.Element} El componente de página de tokens
  */
 export default function TokensPage() {
-  const { account, status } = useWallet();
+  const { account, status, role } = useWallet();
+  const router = useRouter();
   const [tokens, setTokens] = useState<TokenData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // Detectar cambios de cuenta/rol y redirigir al dashboard
+  const [previousAccount, setPreviousAccount] = useState<string | null>(account);
+  useEffect(() => {
+    // Si cambió la cuenta, redirigir al dashboard
+    if (previousAccount && account && previousAccount !== account) {
+      console.log('🔄 Cuenta cambiada en página de tokens, redirigiendo al dashboard...');
+      if (status === 'approved' && role) {
+        if (role === 'ADMIN') {
+          router.push('/admin/users');
+        } else {
+          router.push('/dashboard');
+        }
+      } else {
+        router.push('/');
+      }
+      return;
+    }
+    setPreviousAccount(account);
+  }, [account, previousAccount, status, role, router]);
 
   // Cargar tokens del usuario desde el smart contract
   useEffect(() => {
@@ -109,8 +131,10 @@ export default function TokensPage() {
   if (status !== 'approved') return <p>Tu registro debe ser aprobado para administrar tokens.</p>;
 
   // Determinar si mostrar el botón "Crear token" del encabezado
-  // Ocultarlo cuando se muestra "Crear tu primer token"
-  const showCreateButton = loading || error || tokens.length > 0;
+  // Ocultarlo cuando se muestra "Crear tu primer token" o si el usuario es Admin o Consumer
+  const isAdmin = role && role.toUpperCase() === 'ADMIN';
+  const isConsumer = role && role.toUpperCase() === 'CONSUMER';
+  const showCreateButton = !isAdmin && !isConsumer && (loading || error || tokens.length > 0);
 
   return (
     <section className="space-y-4">
@@ -140,9 +164,18 @@ export default function TokensPage() {
       {!loading && !error && tokens.length === 0 && (
         <div className="rounded-lg border border-gray-200 bg-white p-8 text-center">
           <p className="text-gray-600 mb-4">No tienes tokens creados aún.</p>
-          <Link href="/tokens/create" className="inline-flex">
-            <Button>Crear tu primer token</Button>
-          </Link>
+          {!isAdmin && !isConsumer && (
+            <Link href="/tokens/create" className="inline-flex">
+              <Button>Crear tu primer token</Button>
+            </Link>
+          )}
+          {(isAdmin || isConsumer) && (
+            <p className="text-sm text-gray-500">
+              {isAdmin 
+                ? 'Los administradores no pueden crear tokens.'
+                : 'Los consumidores no pueden crear tokens. Solo pueden recibir tokens mediante transferencias.'}
+            </p>
+          )}
         </div>
       )}
 

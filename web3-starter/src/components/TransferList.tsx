@@ -22,19 +22,27 @@ export function TransferList({ title, items }: { title: string; items: TransferI
         <ul className="space-y-3 text-sm">
           {items.map((item) => (
             <li key={item.id} className="rounded border p-3">
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 items-center">
                 <span className="font-mono">#{item.id}</span>
                 <span className="font-medium">Token {item.tokenId}</span>
-                <span className="ml-auto capitalize">{item.status}</span>
+                <span className={`ml-auto capitalize px-2 py-1 rounded text-xs font-medium ${
+                  item.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                  item.status === 'accepted' ? 'bg-green-100 text-green-800' :
+                  'bg-red-100 text-red-800'
+                }`}>
+                  {item.status === 'pending' ? 'Pendiente' :
+                   item.status === 'accepted' ? 'Aceptada' :
+                   'Rechazada'}
+                </span>
               </div>
               <dl className="mt-2 grid gap-1 md:grid-cols-2">
                 <div>
                   <dt className="text-gray-500">De</dt>
-                  <dd className="font-mono">{item.from}</dd>
+                  <dd className="font-mono text-sm">{item.from.slice(0, 6)}...{item.from.slice(-4)}</dd>
                 </div>
                 <div>
                   <dt className="text-gray-500">Para</dt>
-                  <dd className="font-mono">{item.to}</dd>
+                  <dd className="font-mono text-sm">{item.to.slice(0, 6)}...{item.to.slice(-4)}</dd>
                 </div>
                 <div>
                   <dt className="text-gray-500">Cantidad</dt>

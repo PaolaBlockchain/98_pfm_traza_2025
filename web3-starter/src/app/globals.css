@@ -53,3 +53,27 @@ a {
 .slide-in-from-right-full {
   animation: slide-in-from-right 0.3s ease-out;
 }
+
+/* Animación de flash para el botón de conectar */
+@keyframes pulse-flash {
+  0%, 100% {
+    background: linear-gradient(to right, #3b82f6, #4f46e5);
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+  }
+  25% {
+    background: linear-gradient(to right, #60a5fa, #6366f1);
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.7);
+  }
+  50% {
+    background: linear-gradient(to right, #3b82f6, #4f46e5);
+    box-shadow: 0 0 25px rgba(59, 130, 246, 0.6);
+  }
+  75% {
+    background: linear-gradient(to right, #2563eb, #4338ca);
+    box-shadow: 0 0 35px rgba(59, 130, 246, 0.8);
+  }
+}
+
+.animate-pulse-flash {
+  animation: pulse-flash 2s ease-in-out infinite;
+}

@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import { Web3Provider } from '@/contexts/Web3Context';
 import { ToastProvider } from '@/components/ui/toast';
 import Header from '@/components/Header';
+import WelcomeBanner from '@/components/WelcomeBanner';
 
 export const metadata: Metadata = {
   title: 'Web3 Starter',
@@ -24,7 +25,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <div className="pointer-events-none absolute inset-x-0 top-0 h-32 rounded-b-[56px] border border-gray-200/80 bg-white/70 shadow-sm backdrop-blur-sm" />
               <div className="pointer-events-none absolute inset-y-20 left-2 w-px bg-gradient-to-b from-gray-200/10 via-gray-400/30 to-gray-200/10" />
               <div className="pointer-events-none absolute inset-y-32 right-4 w-px bg-gradient-to-b from-gray-200/10 via-gray-400/30 to-gray-200/10" />
-              <Header />
+              <div className="relative z-10 space-y-6">
+                <WelcomeBanner />
+                <Header />
+              </div>
               <main className="relative z-10 mt-12 flex-1 space-y-10 pb-12">{children}</main>
             </div>
           </ToastProvider>

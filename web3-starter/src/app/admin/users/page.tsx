@@ -38,6 +38,9 @@ export default function AdminUsersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
+  // Estado para rastrear usuarios que están siendo procesados (para evitar múltiples transacciones)
+  const [processingUsers, setProcessingUsers] = useState<Set<string>>(new Set());
+
   /**
    * Efecto para escuchar eventos UserRegistered del contrato
    * Se ejecuta al montar el componente y limpia listeners al desmontar
@@ -187,8 +190,70 @@ export default function AdminUsersPage() {
    * @param {string} id - La dirección del usuario a aprobar
    */
   const handleApprove = async (id: string) => {
+    // Prevenir múltiples transacciones simultáneas para el mismo usuario
+    if (processingUsers.has(id)) {
+      showToast('Ya hay una transacción en proceso para este usuario. Por favor espera.', 'warning');
+      return;
+    }
+
     try {
+      // Validar en el frontend antes de llamar al contrato
+      const user = users.find(u => u.id === id);
+      if (!user) {
+        showToast('Usuario no encontrado', 'error');
+        return;
+      }
+
+      if (user.status === 'approved') {
+        showToast('Este usuario ya está aprobado', 'warning');
+        return;
+      }
+
+      if (user.status !== 'pending') {
+        showToast(`No se puede aprobar un usuario con estado: ${user.status}`, 'warning');
+        return;
+      }
+
+      // Marcar como procesando
+      setProcessingUsers(prev => new Set(prev).add(id));
+
+      // Verificar el estado actual del usuario en el contrato antes de enviar la transacción
       const contractService = new ContractService();
+      try {
+        const currentUserInfo = await contractService.getUserInfo(id);
+        if (currentUserInfo.status === 1) { // 1 = Approved
+          showToast('Este usuario ya fue aprobado. La lista se actualizará automáticamente.', 'info');
+          setProcessingUsers(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(id);
+            return newSet;
+          });
+          // Recargar usuarios para actualizar el estado
+          const pastEvents = await contractService.getPastUserRegisteredEvents();
+          const userAddresses = new Set(pastEvents.map(event => event.user));
+          const loadedUsers: UserRow[] = [];
+          for (const address of userAddresses) {
+            try {
+              const userInfo = await contractService.getUserInfo(address);
+              if (userInfo.role !== 0) {
+                loadedUsers.push({
+                  id: address,
+                  address: address,
+                  role: getRoleName(userInfo.role),
+                  status: getStatusName(userInfo.status),
+                });
+              }
+            } catch (err) {
+              console.log(`Usuario ${address} no encontrado`);
+            }
+          }
+          setUsers(loadedUsers);
+          return;
+        }
+      } catch (err) {
+        console.log('Error al verificar estado del usuario:', err);
+      }
+
       await contractService.approveUser(id);
       console.log('Usuario aprobado:', id);
       
@@ -211,6 +276,39 @@ export default function AdminUsersPage() {
           showToast('El usuario ha cancelado la solicitud desde MetaMask', 'warning');
           return;
         }
+
+        // Detectar error de transacción revertida (usuario ya aprobado o estado inválido)
+        if (
+          errorMessage.includes('invalidtransition') ||
+          errorMessage.includes('invalid transition') ||
+          errorMessage.includes('transaction execution reverted') ||
+          errorMessage.includes('call_exception') ||
+          (error as any)?.code === 'CALL_EXCEPTION'
+        ) {
+          showToast('Este usuario ya fue aprobado por otra transacción. La lista se actualizará automáticamente.', 'info');
+          // Recargar usuarios para actualizar el estado
+          const contractService = new ContractService();
+          const pastEvents = await contractService.getPastUserRegisteredEvents();
+          const userAddresses = new Set(pastEvents.map(event => event.user));
+          const loadedUsers: UserRow[] = [];
+          for (const address of userAddresses) {
+            try {
+              const userInfo = await contractService.getUserInfo(address);
+              if (userInfo.role !== 0) {
+                loadedUsers.push({
+                  id: address,
+                  address: address,
+                  role: getRoleName(userInfo.role),
+                  status: getStatusName(userInfo.status),
+                });
+              }
+            } catch (err) {
+              console.log(`Usuario ${address} no encontrado`);
+            }
+          }
+          setUsers(loadedUsers);
+          return;
+        }
         
         // Para otros errores, sí mostrar el mensaje
         console.error('Error al aprobar usuario:', error);
@@ -219,6 +317,13 @@ export default function AdminUsersPage() {
         console.error('Error desconocido al aprobar usuario:', error);
         showToast('Error desconocido al aprobar usuario', 'error');
       }
+    } finally {
+      // Siempre remover del conjunto de procesamiento
+      setProcessingUsers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(id);
+        return newSet;
+      });
     }
   };
 
@@ -229,8 +334,70 @@ export default function AdminUsersPage() {
    * @param {string} id - La dirección del usuario a rechazar
    */
   const handleReject = async (id: string) => {
+    // Prevenir múltiples transacciones simultáneas para el mismo usuario
+    if (processingUsers.has(id)) {
+      showToast('Ya hay una transacción en proceso para este usuario. Por favor espera.', 'warning');
+      return;
+    }
+
     try {
+      // Validar en el frontend antes de llamar al contrato
+      const user = users.find(u => u.id === id);
+      if (!user) {
+        showToast('Usuario no encontrado', 'error');
+        return;
+      }
+
+      if (user.status === 'rejected') {
+        showToast('Este usuario ya está rechazado', 'warning');
+        return;
+      }
+
+      if (user.status !== 'pending') {
+        showToast(`No se puede rechazar un usuario con estado: ${user.status}`, 'warning');
+        return;
+      }
+
+      // Marcar como procesando
+      setProcessingUsers(prev => new Set(prev).add(id));
+
+      // Verificar el estado actual del usuario en el contrato antes de enviar la transacción
       const contractService = new ContractService();
+      try {
+        const currentUserInfo = await contractService.getUserInfo(id);
+        if (currentUserInfo.status === 2) { // 2 = Rejected
+          showToast('Este usuario ya fue rechazado. La lista se actualizará automáticamente.', 'info');
+          setProcessingUsers(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(id);
+            return newSet;
+          });
+          // Recargar usuarios para actualizar el estado
+          const pastEvents = await contractService.getPastUserRegisteredEvents();
+          const userAddresses = new Set(pastEvents.map(event => event.user));
+          const loadedUsers: UserRow[] = [];
+          for (const address of userAddresses) {
+            try {
+              const userInfo = await contractService.getUserInfo(address);
+              if (userInfo.role !== 0) {
+                loadedUsers.push({
+                  id: address,
+                  address: address,
+                  role: getRoleName(userInfo.role),
+                  status: getStatusName(userInfo.status),
+                });
+              }
+            } catch (err) {
+              console.log(`Usuario ${address} no encontrado`);
+            }
+          }
+          setUsers(loadedUsers);
+          return;
+        }
+      } catch (err) {
+        console.log('Error al verificar estado del usuario:', err);
+      }
+
       await contractService.rejectUser(id);
       console.log('Usuario rechazado:', id);
       
@@ -253,6 +420,39 @@ export default function AdminUsersPage() {
           showToast('El usuario ha cancelado la solicitud desde MetaMask', 'warning');
           return;
         }
+
+        // Detectar error de transacción revertida (usuario ya rechazado o estado inválido)
+        if (
+          errorMessage.includes('invalidtransition') ||
+          errorMessage.includes('invalid transition') ||
+          errorMessage.includes('transaction execution reverted') ||
+          errorMessage.includes('call_exception') ||
+          (error as any)?.code === 'CALL_EXCEPTION'
+        ) {
+          showToast('Este usuario ya fue rechazado por otra transacción. La lista se actualizará automáticamente.', 'info');
+          // Recargar usuarios para actualizar el estado
+          const contractService = new ContractService();
+          const pastEvents = await contractService.getPastUserRegisteredEvents();
+          const userAddresses = new Set(pastEvents.map(event => event.user));
+          const loadedUsers: UserRow[] = [];
+          for (const address of userAddresses) {
+            try {
+              const userInfo = await contractService.getUserInfo(address);
+              if (userInfo.role !== 0) {
+                loadedUsers.push({
+                  id: address,
+                  address: address,
+                  role: getRoleName(userInfo.role),
+                  status: getStatusName(userInfo.status),
+                });
+              }
+            } catch (err) {
+              console.log(`Usuario ${address} no encontrado`);
+            }
+          }
+          setUsers(loadedUsers);
+          return;
+        }
         
         // Para otros errores, sí mostrar el mensaje
         console.error('Error al rechazar usuario:', error);
@@ -261,6 +461,13 @@ export default function AdminUsersPage() {
         console.error('Error desconocido al rechazar usuario:', error);
         showToast('Error desconocido al rechazar usuario', 'error');
       }
+    } finally {
+      // Siempre remover del conjunto de procesamiento
+      setProcessingUsers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(id);
+        return newSet;
+      });
     }
   };
 
@@ -406,7 +613,8 @@ export default function AdminUsersPage() {
       <UserTable 
         rows={users} 
         onApprove={handleApprove} 
-        onReject={handleReject} 
+        onReject={handleReject}
+        processingUsers={processingUsers}
       />
     </section>
   );

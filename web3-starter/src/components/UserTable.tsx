@@ -14,9 +14,10 @@ export type UserTableProps = {
   rows: UserRow[];
   onApprove?: (id: string) => void;
   onReject?: (id: string) => void;
+  processingUsers?: Set<string>; // IDs de usuarios que están siendo procesados
 };
 
-export function UserTable({ title = 'Usuarios', rows, onApprove, onReject }: UserTableProps) {
+export function UserTable({ title = 'Usuarios', rows, onApprove, onReject, processingUsers = new Set() }: UserTableProps) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
       <div className="border-b border-gray-200 px-6 py-4">
@@ -61,17 +62,25 @@ export function UserTable({ title = 'Usuarios', rows, onApprove, onReject }: Use
                         variant="primary"
                         onClick={() => onApprove?.(row.id)}
                         aria-label={`Aprobar ${row.address}`}
+                        disabled={processingUsers.has(row.id)}
                       >
-                        Aprobar
+                        {processingUsers.has(row.id) ? 'Procesando...' : 'Aprobar'}
                       </Button>
                       <Button
                         variant="secondary"
                         onClick={() => onReject?.(row.id)}
                         aria-label={`Rechazar ${row.address}`}
+                        disabled={processingUsers.has(row.id)}
                       >
-                        Rechazar
+                        {processingUsers.has(row.id) ? 'Procesando...' : 'Rechazar'}
                       </Button>
                     </div>
+                  ) : row.status === 'approved' ? (
+                    <span className="text-sm text-green-600 font-medium">✓ Ya aprobado</span>
+                  ) : row.status === 'rejected' ? (
+                    <span className="text-sm text-red-600 font-medium">✗ Rechazado</span>
+                  ) : row.status === 'canceled' ? (
+                    <span className="text-sm text-gray-600 font-medium">⊘ Cancelado</span>
                   ) : (
                     <span className="text-gray-500">—</span>
                   )}

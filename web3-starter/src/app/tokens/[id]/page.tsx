@@ -6,6 +6,7 @@ import { useWallet } from '@/hooks/useWallet';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ContractService } from '@/lib/contractService';
+import TokenTraceabilityTree from '@/components/TokenTraceabilityTree';
 
 /**
  * Estructura de datos del token desde el smart contract
@@ -37,11 +38,31 @@ type TokenDetails = {
 export default function TokenDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { account, status } = useWallet();
+  const { account, status, role } = useWallet();
   
   const [token, setToken] = useState<TokenDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // Detectar cambios de cuenta/rol y redirigir al dashboard
+  const [previousAccount, setPreviousAccount] = useState<string | null>(account);
+  useEffect(() => {
+    // Si cambió la cuenta, redirigir al dashboard
+    if (previousAccount && account && previousAccount !== account) {
+      console.log('🔄 Cuenta cambiada en página de detalles de token, redirigiendo al dashboard...');
+      if (status === 'approved' && role) {
+        if (role === 'ADMIN') {
+          router.push('/admin/users');
+        } else {
+          router.push('/dashboard');
+        }
+      } else {
+        router.push('/');
+      }
+      return;
+    }
+    setPreviousAccount(account);
+  }, [account, previousAccount, status, role, router]);
 
   // Obtener ID del token desde los parámetros de la URL
   const tokenId = params?.id ? parseInt(params.id as string, 10) : null;
@@ -62,8 +83,24 @@ export default function TokenDetailPage() {
         // Cargar información del token
         const tokenData = await contractService.getToken(tokenId);
         
-        // Cargar balance del usuario
+        // Cargar balance del usuario desde el contrato
+        // El contrato ya maneja el balance correctamente:
+        // - Para creador: Suministro Total - Transferido
+        // - Para otros: Recibido - Transferido
+        // El balance se actualiza automáticamente en cada transacción
         const balance = await contractService.getTokenBalance(tokenId, account);
+        console.log(`[TokenDetail] Balance del contrato para token ${tokenId}:`, balance);
+        console.log(`[TokenDetail] Suministro Total:`, tokenData.totalSupply);
+        console.log(`[TokenDetail] Creador:`, tokenData.creator);
+        console.log(`[TokenDetail] Cuenta actual:`, account);
+        console.log(`[TokenDetail] Es creador:`, tokenData.creator.toLowerCase() === account.toLowerCase());
+        
+        // Si es el creador, verificar que el balance sea correcto
+        if (tokenData.creator.toLowerCase() === account.toLowerCase()) {
+          const expectedBalance = tokenData.totalSupply; // Inicialmente debería ser igual al suministro total
+          console.log(`[TokenDetail] Balance esperado (sin transferencias):`, expectedBalance);
+          console.log(`[TokenDetail] Diferencia:`, expectedBalance - balance, 'unidades transferidas');
+        }
         
         // Cargar información del token padre si existe
         let parentName: string | undefined;
@@ -91,6 +128,35 @@ export default function TokenDetailPage() {
     }
 
     loadTokenDetails();
+    
+    // Escuchar eventos de transferencias para actualizar el balance automáticamente
+    const contractService = new ContractService();
+    const updateBalance = async () => {
+      if (!account || !tokenId || status !== 'approved') return;
+      try {
+        const newBalance = await contractService.getTokenBalance(tokenId, account);
+        setToken(prev => prev ? { ...prev, balance: newBalance } : null);
+      } catch (err) {
+        console.error('Error al actualizar balance:', err);
+      }
+    };
+
+    // Suscribirse a eventos de transferencias
+    try {
+      contractService.onTransferAccepted(() => {
+        updateBalance();
+      });
+      contractService.onTransferRejected(() => {
+        updateBalance();
+      });
+    } catch (err) {
+      console.error('Error al suscribirse a eventos:', err);
+    }
+
+    // Cleanup: remover listeners al desmontar
+    return () => {
+      // Los listeners se limpiarán automáticamente cuando el componente se desmonte
+    };
   }, [account, tokenId, status]);
 
   // Control de acceso: Requiere conexión de wallet
@@ -169,10 +235,41 @@ export default function TokenDetailPage() {
                 </div>
 
                 <div>
-                  <dt className="font-medium text-gray-500 mb-1">Tu Balance</dt>
-                  <dd className="text-gray-900 font-semibold">
+                  <div className="flex items-center justify-between mb-1">
+                    <dt className="font-medium text-gray-500">Tu Balance</dt>
+                    <button
+                      onClick={async () => {
+                        if (!account || !tokenId) return;
+                        try {
+                          const contractService = new ContractService();
+                          const newBalance = await contractService.getTokenBalance(tokenId, account);
+                          console.log('[TokenDetail] Balance refrescado manualmente:', newBalance);
+                          setToken(prev => prev ? { ...prev, balance: newBalance } : null);
+                        } catch (err) {
+                          console.error('Error al refrescar balance:', err);
+                        }
+                      }}
+                      className="text-xs text-blue-600 hover:text-blue-800 underline"
+                    >
+                      🔄 Refrescar
+                    </button>
+                  </div>
+                  <dd className="text-gray-900 font-semibold text-lg">
+                    {/* El balance del contrato ya refleja el estado correcto:
+                        - Para creador: Suministro Total - Transferido
+                        - Para otros: Recibido - Transferido
+                        El contrato actualiza automáticamente el balance en cada transacción */}
                     {token.balance !== undefined ? token.balance.toLocaleString() : '0'}
                   </dd>
+                  {token.creator.toLowerCase() === account?.toLowerCase() ? (
+                    <dd className="text-xs text-gray-500 mt-1 bg-gray-50 p-2 rounded">
+                      <strong>Desglose (Eres el creador):</strong> {token.totalSupply.toLocaleString()} (Suministro Total) - {(token.totalSupply - (token.balance || 0)).toLocaleString()} (Transferido) = <strong>{token.balance?.toLocaleString() || '0'}</strong> (Tu Balance)
+                    </dd>
+                  ) : (
+                    <dd className="text-xs text-gray-500 mt-1 bg-blue-50 p-2 rounded border border-blue-200">
+                      <strong>Nota:</strong> Este es tu balance (lo que recibiste menos lo que transferiste). El balance del creador es diferente.
+                    </dd>
+                  )}
                 </div>
 
                 <div>
@@ -226,12 +323,19 @@ export default function TokenDetailPage() {
             </div>
           </Card>
 
+          {/* Árbol de Trazabilidad */}
+          <Card>
+            <div className="p-6">
+              <TokenTraceabilityTree tokenId={token.id} />
+            </div>
+          </Card>
+
           {/* Acciones */}
           <div className="flex gap-3">
             <Link href="/tokens">
               <Button variant="secondary">Volver a Mis tokens</Button>
             </Link>
-            {token.balance && token.balance > 0 && (
+            {token.balance && token.balance > 0 && role && role.toUpperCase() !== 'CONSUMER' && (
               <Link href={`/transfers?tokenId=${token.id}`}>
                 <Button>Transferir tokens</Button>
               </Link>
