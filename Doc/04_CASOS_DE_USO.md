@@ -1,136 +1,101 @@
 # Casos de Uso - Sistema de Supply Chain
 
 ## Descripción General
-Sistema de gestión de usuarios con roles y estados para trazabilidad en cadena de suministro, implementado con smart contracts en Solidity y frontend en Next.js.
+# 1. Casos de Uso - Sistema de Supply Chain
 
-**Cobertura de Testing:**
+## 1.1 Descripción General
 - ✅ **Casos Positivos**: Flujos exitosos de registro, aprobación, creación de tokens y transferencias
-- ✅ **Casos Negativos**: Validaciones de errores, permisos denegados y transiciones inválidas
+## 2. Roles del Sistema
 - ✅ **Casos de Borde**: Múltiples rechazos, re-solicitudes, cambios de cuenta y estados terminales
-- ✅ **Validaciones de Seguridad**: Control de acceso, protección de admin y prevención de ciclos
+### 2.1 Roles Disponibles
 
----
+### 2.2 Restricciones de Roles
 
-
+### 2.3 Matriz de Permisos por Rol
 ## 1. Roles del Sistema
-
+## 3. Estados de Usuario
 ### 1.1 Roles Disponibles
-
+### 3.1 Descripción de Estados
 | Rol | ID | Descripción | Permisos |
-|-----|----|-----------|---------| 
+## 4. Casos de Uso por Estado
 | **Admin** | 0 | Administrador del sistema | Aprobar/rechazar usuarios (NO puede crear tokens ni transferir) |
-| **Producer** | 1 | Productor de materias primas | Crear tokens raíz (materias primas), transferir solo a Factory |
+### 4.1 PENDING: Usuario espera aprobación del administrador
 | **Factory** | 2 | Procesador/Fabricante | Crear tokens derivados, recibir de Producer, transferir solo a Retailer |
-| **Retailer** | 3 | Distribuidor/Minorista | Recibir de Factory, transferir solo a Consumer (NO puede crear tokens) |
+### 4.2 APPROVED: Usuario aprobado con acceso completo según rol
 | **Consumer** | 4 | Consumidor final | Recibir de Retailer, consultar trazabilidad (NO puede crear ni transferir tokens) |
+#### 4.2.1 Funcionalidades por Rol
 
-
-### 1.2 Restricciones de Roles
+### 4.3 REJECTED: Usuario rechazado, debe volver a solicitar
 - ✅ Usuarios pueden solicitar: Producer, Factory, Retailer, Consumer
-- ❌ Rol Admin NO puede ser solicitado por usuarios (solo asignado por contrato)
+### 4.4 CANCELED: Usuario canceló cuenta, puede re-solicitar
 - ✅ Solo existe UN admin por contrato (Account #0 de Anvil en desarrollo)
-
+## 5. Matriz de Transiciones de Estado
 ### 1.3 Matriz de Permisos por Rol
-
+### 5.1 Transiciones Permitidas
 Tabla de referencia rápida de qué puede hacer cada rol:
-
+## 6. Casos de Uso del Admin
 | Acción | Admin | Producer | Factory | Retailer | Consumer |
-|--------|-------|----------|---------|----------|----------|
+## 7. Validaciones y Errores
 | **Crear tokens raíz** | ❌ | ✅ | ❌ | ❌ | ❌ |
-| **Crear tokens derivados** | ❌ | ❌ | ✅ | ❌ | ❌ |
+### 7.1 Errores del Contrato
 | **Transferir tokens** | ❌ | ✅ (a Factory) | ✅ (a Retailer) | ✅ (a Consumer) | ❌ |
-| **Recibir tokens** | ❌ | ❌ | ✅ (de Producer) | ✅ (de Factory) | ✅ (de Retailer) |
+### 7.2 Manejo de Errores en Frontend
 | **Consultar trazabilidad** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Aprobar/Rechazar usuarios** | ✅ | ❌ | ❌ | ❌ | ❌ |
+## 8. Flujos Completos
 
-**⚠️ Restricciones Clave**: Producer (solo raíz) • Factory (solo derivados con balance) • Retailer (NO crea, solo distribuye) • Consumer (punto final) • Admin (gestiona, no participa)
+### 8.1 Flujo: Usuario Nuevo se Registra como Producer
 
----
+### 8.2 Flujo: Admin Aprueba Usuario
 
-
+### 8.3 Flujo: Usuario Rechazado Vuelve a Solicitar
 ## 2. Estados de Usuario
-
-### 2.1 Máquina de Estados
-
-```
-┌──────────┐
-│          │
-│  NUEVO   │ (No registrado)
-│          │
-└────┬─────┘
-     │ requestUserRole()
-     ▼
-┌──────────┐
-│          │
-│ PENDING  │ ◄────────────┐
-│          │              │
-└────┬─────┘              │
-     │                    │
-     │                    │ (Re-solicitar)
-     ├─────────┬──────────┤
-     │         │          │
-     ▼         ▼          │
-┌─────────┐ ┌──────────┐ │
-│         │ │          │ │
-│APPROVED │ │ REJECTED │─┘
-│         │ │          │
-└────┬────┘ └──────────┘
-     │
-     │ cancelMyAccount()
-     ▼
-┌──────────┐
-│          │
-│ CANCELED │ (Terminal)
-│          │
-└──────────┘
-```
-
+## 9. Casos de Uso - Gestión de Tokens
 ### 2.2 Descripción de Estados
-
+### 9.1 Crear Token Raíz (Producer)
 | Estado | Valor | Descripción | Estado Terminal |
-|--------|-------|-------------|----------------|
+### 9.2 Crear Token Derivado (Factory)
 | **Pending** | 0 | Usuario registrado esperando aprobación del admin | No |
-| **Approved** | 1 | Usuario activo con permisos completos | No |
+### 9.3 Validación de Balance al Crear Token
 | **Rejected** | 2 | Usuario rechazado por admin | No |
-| **Canceled** | 3 | Usuario canceló su cuenta o fue dado de baja | Sí |
+### 9.4 Ver Detalles de Token
 
----
+### 9.5 Balance del Token - Cálculo Correcto
 
-## 3. Casos de Uso por Estado
+## 10. Casos de Uso - Transferencias
 
-### 3.1 PENDING: Usuario espera aprobación del administrador
+### 10.1 Solicitar Transferencia (Producer → Factory)
 
-| Acción | Usuario | Admin | Resultado |
+### 10.2 Aceptar Transferencia (Factory)
 |--------|---------|-------|-----------|
-| **Cancelar solicitud** | ✅ SÍ | ❌ NO | Estado → CANCELED |
+### 10.3 Rechazar Transferencia
 | **Aprobar usuario** | ❌ NO | ✅ SÍ | Estado → APPROVED |
-| **Rechazar usuario** | ❌ NO | ✅ SÍ | Estado → REJECTED |
+### 10.4 Restricciones de Transferencia por Rol
 | **Volver a solicitar** | ❌ NO | ❌ NO | Error: UserAlreadyRegistered |
-| **Acceder a dashboard** | ❌ NO | ✅ SÍ (si es admin) | Acceso limitado |
+#### 10.4.1 Descripción
 
-**Flujo**: Conectar wallet → Seleccionar rol → Emitir solicitud → MetaMask → Blockchain (PENDING) → Mensaje "Cola de Validación" → Esperar o cancelar
+#### 10.4.2 Flujos Permitidos
 
----
+#### 10.4.3 Flujos NO Permitidos
 
-### 3.2 APPROVED: Usuario aprobado con acceso completo según rol
+#### 10.4.4 Validaciones del Contrato
 
-| Acción | Usuario | Admin | Resultado |
+## 11. Casos de Uso - Árbol de Trazabilidad
 |--------|---------|-------|-----------|
-| **Cancelar cuenta** | ✅ SÍ | ❌ NO | Estado → CANCELED |
+### 11.1 Visualizar Árbol de Trazabilidad Completo
 | **Acceder a dashboard** | ✅ SÍ | ✅ SÍ | Acceso completo según rol |
-| **Volver a solicitar** | ❌ NO | ❌ NO | Error: UserAlreadyRegistered |
+### 11.2 Ver Token Padre en el Árbol
 
-
+## 12. Resumen de Cobertura de Testing
 **Flujo**: Admin aprueba (/admin/users) → UserStatusChanged(APPROVED) → Usuario recarga → Redirección dashboard → Acceso funcionalidades
-
+### 12.1 Casos Positivos (Flujos Exitosos) ✅
 #### Funcionalidades por Rol
-
+### 12.2 Casos Negativos (Validaciones Error) ❌
 | Rol | Capacidades |
-|-----|-------------|
+### 12.3 Casos de Borde (Escenarios Especiales) ⚠️
 | **Producer** | ✅ Crear tokens raíz (materias primas sin parentId) • ✅ Transferir solo a Factory • ❌ NO crear derivados |
-| **Factory** | ✅ Recibir de Producer • ✅ Crear derivados (productos procesados) • ✅ Transferir solo a Retailer • ❌ NO raíz |
+### 12.4 Validaciones Integración ✅
 | **Retailer** | ✅ Recibir de Factory • ✅ Transferir solo a Consumer • ❌ NO crear tokens |
-| **Consumer** | ✅ Recibir de Retailer • ✅ Consultar trazabilidad y ver historial • ❌ NO transferir ni crear |
+### 12.5 Cobertura por Rol 📊
 
 ---
 
@@ -243,32 +208,6 @@ Tabla de referencia rápida de qué puede hacer cada rol:
 
 ---
 
-## 8. Seguridad y Buenas Prácticas
-
-| Validación | Implementación |
-|------------|------------------|
-| ✅ **Control de acceso** | Solo admin aprueba/rechaza. Usuarios gestionan su propia cuenta |
-| ✅ **Transiciones de estado** | Máquina de estados estricta. Sin saltos inválidos |
-| ✅ **Protección admin** | Admin no puede ser rechazado, cancelar cuenta ni cambiar su rol |
-| ✅ **Doble registro** | Usuario solo una cuenta activa (PENDING/APPROVED). REJECTED/CANCELED pueden re-solicitar |
-| ✅ **Auditoría** | Todos los cambios emiten eventos. Historial en localStorage |
-
-**Mejoras Futuras**: 🔄 Persistencia DB • 🔄 Notificaciones email • 🔄 Roles dinámicos • 🔄 Límite rechazos
-
-
-
-## 9. Comandos y Configuración
-
-Para información detallada sobre comandos, scripts y configuración del sistema, consulta **[03_GUIA_TECNICA_INSTALACION.md](./03_GUIA_TECNICA_INSTALACION.md)**.
-
-**Comandos principales**:
-- Iniciar todo el sistema: `.\RESTART-ALL.ps1`
-- Compilar contrato: `cd backend && forge build`
-- Ejecutar tests: `cd backend && forge test -vv`
-- Iniciar frontend: `cd web3-starter && npm run dev`
-
----
-
 ## 10. Casos de Uso - Gestión de Tokens
 
 ### 10.1 Crear Token Raíz (Producer)
@@ -342,7 +281,6 @@ Validar que solo se permiten transferencias según el flujo de roles.
 
 #### Validaciones del Contrato
 `_validateTransferRoles`: ✅ `Producer→Factory` • ✅ `Factory→Retailer` • ✅ `Retailer→Consumer` • ❌ Resto (Admin/Consumer no transfieren)
-
 
 ---
 

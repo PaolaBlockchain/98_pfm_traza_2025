@@ -55,7 +55,6 @@ NEXT_PUBLIC_RPC_URL=http://localhost:8545
 NEXT_PUBLIC_CHAIN_ID=31337
 NEXT_PUBLIC_CONTRACT_ADDRESS=<SE_AUTOGENERA>
 ```
-
 Compilar:
 ```bash
 npm run build
