@@ -109,7 +109,7 @@ Confieso que implementar la lógica de roles y permisos en el frontend fue uno d
 ```
 
 ### 2.4.1 Roles Disponibles
-
+```
 | Rol          | ID | Descripción               | Permisos                                                 |
 |--------------|----|---------------------------|----------------------------------------------------------|
 | **Admin**    | 0  | Administrador del sistema | Control total: aprobar/rechazar usuarios, cambiar roles, |
@@ -118,6 +118,7 @@ Confieso que implementar la lógica de roles y permisos en el frontend fue uno d
 | **Factory**  | 2  | Procesador/Fabricante | Transformar materias primas en productos                     |
 | **Retailer** | 3  | Distribuidor/Minorista | Distribución y venta de productos                           |
 | **Consumer** | 4  | Consumidor final | Consultar trazabilidad de productos                               |
+```
 
 ### 2.4.2 Restricciones de Roles
 ```
@@ -175,10 +176,12 @@ Confieso que implementar la lógica de roles y permisos en el frontend fue uno d
 
 Para información detallada sobre prerequisitos, instalación y configuración del sistema, consulta la **[Guía Técnica de Instalación](./03_GUIA_TECNICA_INSTALACION.md)**:
 
-- **[📋 Requisitos para configurar el Sistema](./03_GUIA_TECNICA_INSTALACION.md#-requisitos-para-configurar-el-sistema)** - Node.js, Git, Foundry, MetaMask
-- **[🔧 Configuración del Entorno](./03_GUIA_TECNICA_INSTALACION.md#-configuración-del-entorno)** - Clonar repositorio, configurar smart contracts, frontend, variables de entorno y MetaMask
-- **[🏁 Instalación Completa (Primera Vez)](./03_GUIA_TECNICA_INSTALACION.md#-instalación-completa-primera-vez)** - Guía paso a paso para primera instalación
-- **[🚀 Inicio Rápido](./03_GUIA_TECNICA_INSTALACION.md#-inicio-rápido)** - Comandos rápidos para usuarios experimentados
+- **[📋 Requisitos previos](./03_GUIA_TECNICA_INSTALACION.md#1-requisitos-previos)** - Node.js, Git, Foundry, MetaMask
+- **[📦 Clonar proyecto](./03_GUIA_TECNICA_INSTALACION.md#2-clonar-proyecto)** - Clonar repositorio
+- **[⚙️ Configuración Backend](./03_GUIA_TECNICA_INSTALACION.md#3-configuración-backend)** - Configurar smart contracts y ejecutar tests
+- **[🎨 Configuración Frontend](./03_GUIA_TECNICA_INSTALACION.md#4-configuración-frontend)** - Configurar frontend, variables de entorno
+- **[🦊 MetaMask](./03_GUIA_TECNICA_INSTALACION.md#5-metamask)** - Configurar MetaMask con Anvil
+- **[🚀 Arranque completo](./03_GUIA_TECNICA_INSTALACION.md#6-arranque-completo)** - Inicio rápido con script automatizado
 ```
 
 ## 2.7 Flujos de Trabajo
