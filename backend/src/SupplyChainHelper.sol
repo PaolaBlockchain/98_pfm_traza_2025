@@ -60,40 +60,4 @@ library SupplyChainHelper {
         return roleId != 0;
     }
 
-    /**
-     * @notice Valida si la combinación de rol y parentId es válida para crear un token.
-     * @dev Reglas de negocio:
-     * - Si parentId == 0: Solo Producer (1) puede crear tokens raíz
-     * - Si parentId != 0: Producer NO puede usar parentId, y el parentId debe existir
-     *
-     * @param roleId Código uint8 del rol (0=Admin, 1=Producer, 2=Factory, 3=Retailer, 4=Consumer)
-     * @param parentId ID del token padre (0 = token raíz)
-     * @param nextTokenId Siguiente ID de token disponible (para validar existencia del parentId)
-     * @return bool true si la combinación es válida, false en caso contrario
-     */
-    function isValidTokenParent(
-        uint8 roleId,
-        uint256 parentId,
-        uint256 nextTokenId
-    ) internal pure returns (bool) {
-        // Si es token raíz (parentId == 0)
-        if (parentId == 0) {
-            // Solo Producer puede crear tokens raíz
-            return roleId == 1; // 1 = Producer
-        }
-
-        // Si tiene parentId (parentId != 0)
-        // Producer NO puede usar parentId
-        if (roleId == 1) {
-            return false; // Producer no puede usar parentId
-        }
-
-        // El parentId debe existir (debe ser <= nextTokenId y > 0)
-        if (parentId > nextTokenId || parentId == 0) {
-            return false;
-        }
-
-        // Factory, Retailer pueden usar parentId válido
-        return true;
-    }
 }

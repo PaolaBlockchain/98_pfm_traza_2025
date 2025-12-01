@@ -292,7 +292,11 @@ contract SupplyChain {
     //                    Gestión de Usuarios / Roles
     // ============================================================
 
-    function requestUserRoleByEnum(Roles rol_) external {
+    /**
+     * @notice Función interna para registrar o actualizar un usuario
+     * @dev Extrae la lógica común de requestUserRoleByEnum y requestUserRoleById
+     */
+    function _registerOrUpdateUser(Roles rol_) internal {
         uint256 existingId = addressToUserId[msg.sender];
         
         if (existingId != 0) {
@@ -326,40 +330,13 @@ contract SupplyChain {
         emit UserRegistered(msg.sender, nextUserId, rol_, UserStatus.Pending);
     }
 
+    function requestUserRoleByEnum(Roles rol_) external {
+        _registerOrUpdateUser(rol_);
+    }
+
     function requestUserRoleById(uint8 rolId) external {
-        uint256 existingId = addressToUserId[msg.sender];
-        
-        if (existingId != 0) {
-            UserStatus currentStatus = users[existingId].status;
-            if (currentStatus != UserStatus.Rejected && currentStatus != UserStatus.Canceled) {
-                revert UserAlreadyRegistered();
-            }
-            if (rolId > uint8(type(Roles).max)) revert RoleOutOfRange();
-            if (!SupplyChainHelper.isAllowedNonAdminRole(rolId)) revert AdminRoleNotAllowed();
-            
-            users[existingId].rol = Roles(rolId);
-            users[existingId].status = UserStatus.Pending;
-            
-            emit UserRegistered(msg.sender, existingId, Roles(rolId), UserStatus.Pending);
-            return;
-        }
-        
         if (rolId > uint8(type(Roles).max)) revert RoleOutOfRange();
-        if (!SupplyChainHelper.isAllowedNonAdminRole(rolId)) revert AdminRoleNotAllowed();
-
-        unchecked {
-            ++nextUserId;
-        }
-        addressToUserId[msg.sender] = nextUserId;
-
-        users[nextUserId] = User({
-            userAddress: msg.sender,
-            rol: Roles(rolId),
-            status: UserStatus.Pending,
-            id: nextUserId
-        });
-
-        emit UserRegistered(msg.sender, nextUserId, Roles(rolId), UserStatus.Pending);
+        _registerOrUpdateUser(Roles(rolId));
     }
 
     function getUserInfo(
@@ -472,7 +449,7 @@ contract SupplyChain {
 
         if (parentId != 0) {
             if (u.rol == Roles.Producer) revert InvalidParent();
-            if (parentId > nextTokenId || parentId == 0) revert InvalidParent();
+            if (parentId > nextTokenId) revert InvalidParent();
             
             // Validar que el usuario tenga suficiente balance del token padre
             // Para crear tokens derivados, el usuario debe tener balance del token padre
@@ -559,26 +536,38 @@ contract SupplyChain {
 
     /**
      * @notice Devuelve todos los tokenIds donde el usuario tiene balance > 0
+     * @dev Optimizado para reducir operaciones de memoria
      */
     function getUserTokens(
         address user
     ) external view returns (uint256[] memory) {
-        uint256[] memory result = new uint256[](nextTokenId);
+        if (nextTokenId == 0) {
+            return new uint256[](0);
+        }
+
+        uint256[] memory temp = new uint256[](nextTokenId);
         uint256 count = 0;
 
-        for (uint256 i = 1; i <= nextTokenId; i++) {
+        for (uint256 i = 1; i <= nextTokenId; ++i) {
             if (tokens[i].balance[user] > 0) {
-                result[count] = i;
-                count++;
+                temp[count] = i;
+                unchecked {
+                    ++count;
+                }
             }
         }
 
-        uint256[] memory finalResult = new uint256[](count);
-        for (uint256 i = 0; i < count; i++) {
-            finalResult[i] = result[i];
+        if (count == 0) {
+            return new uint256[](0);
         }
 
-        return finalResult;
+        // Redimensionar array al tamaño exacto
+        uint256[] memory result = new uint256[](count);
+        for (uint256 i = 0; i < count; ++i) {
+            result[i] = temp[i];
+        }
+
+        return result;
     }
 
     // ============================================================
