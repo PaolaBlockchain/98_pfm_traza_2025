@@ -1542,3 +1542,10 @@ Consumer tenía acceso a transferir tokens, pero no debería poder hacerlo.
 **Fecha:** 30 de noviembre de 2025  
 **Autor:** GitHub Copilot  
 **Proyecto:** Sistema de Trazabilidad Supply Chain
+
+---
+
+[01_PROYECTO_A_IMPLEMENTAR.md](./01_PROYECTO_A_IMPLEMENTAR.md)
+[02_PROYECTO_IMPLEMENTADO_Y_ANALISIS.md](./02_PROYECTO_IMPLEMENTADO_Y_ANALISIS.md)
+[03_GUIA_TECNICA_INSTALACION.md](./03_GUIA_TECNICA_INSTALACION.md)
+[05_IA.md](./05_IA.md)

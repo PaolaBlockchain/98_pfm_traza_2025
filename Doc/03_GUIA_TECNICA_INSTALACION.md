@@ -85,3 +85,9 @@ cast call <CONTRACT> "nextUserId()(uint256)" --rpc-url http://localhost:8545
 - Resetear MetaMask si saldo aparece en 0
 - Usuario debe estar Approved para operar
 - Verificar Node >= 18
+
+# Documentación Adicional
+- [01_PROYECTO_A_IMPLEMENTAR.md](./01_PROYECTO_A_IMPLEMENTAR.md)
+- [02_PROYECTO_IMPLEMENTADO_Y_ANALISIS.md](./02_PROYECTO_IMPLEMENTADO_Y_ANALISIS.md)
+- [04_CASOS_DE_USO.md](./04_CASOS_DE_USO.md)
+- [05_IA.md](./05_IA.md)
