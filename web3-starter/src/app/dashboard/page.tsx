@@ -141,7 +141,6 @@ export default function DashboardPage() {
         <div className="rounded-2xl border border-gray-200/80 bg-white/80 px-6 py-5 shadow-sm backdrop-blur-sm">
           <h2 className="font-mono text-[0.65rem] uppercase tracking-[0.4em] text-gray-400 mb-4">Resumen de Misión</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-
             {/* Enlace al módulo de tokens (Admin no puede crear tokens) */}
             {role && role.toUpperCase() !== 'ADMIN' && (
               <Link href="/tokens" className="group flex flex-col gap-3 rounded-xl border border-gray-200/80 bg-white px-5 py-6 shadow-sm transition-all duration-300 hover:-translate-y-[1px] hover:shadow-md">
@@ -150,15 +149,21 @@ export default function DashboardPage() {
               </Link>
             )}
 
-            {/* Enlace al módulo de transferencias (Admin y Consumer no pueden hacer transferencias) */}
+            {/* Enlace al módulo de transferencias para CONSUMER */}
+            {role && role.toUpperCase() === 'CONSUMER' && (
+              <Link href="/transfers" className="group flex flex-col gap-3 rounded-xl border border-blue-200/80 bg-blue-50 px-5 py-6 shadow-sm transition-all duration-300 hover:-translate-y-[1px] hover:shadow-md">
+                <p className="font-mono text-xs uppercase tracking-[0.32em] text-blue-700">Transferencias</p>
+                <p className="text-xs leading-relaxed text-blue-700">Ver y recibir transferencias de tokens</p>
+              </Link>
+            )}
+
+            {/* Enlace al módulo de transferencias (Factory/Retailer) */}
             {role && role.toUpperCase() !== 'ADMIN' && role.toUpperCase() !== 'CONSUMER' && (
               <Link href="/transfers" className="group flex flex-col gap-3 rounded-xl border border-gray-200/80 bg-white px-5 py-6 shadow-sm transition-all duration-300 hover:-translate-y-[1px] hover:shadow-md">
                 <p className="font-mono text-xs uppercase tracking-[0.32em] text-gray-600">Transferencias</p>
                 <p className="text-xs leading-relaxed text-gray-600">Ver y gestionar transferencias</p>
               </Link>
             )}
-
-            {/* Enlace al panel de administración (solo para admins) */}
             {role && role.toUpperCase() === 'ADMIN' && (
               <Link href="/admin/users" className="group flex flex-col gap-3 rounded-xl border border-gray-200/80 bg-white px-5 py-6 shadow-sm transition-all duration-300 hover:-translate-y-[1px] hover:shadow-md">
                 <p className="font-mono text-xs uppercase tracking-[0.32em] text-gray-600">Administración de Usuarios</p>

@@ -180,7 +180,7 @@ export default function TokenDetailPage() {
   }
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-6">
       {/* Encabezado con botón de regreso */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -304,12 +304,12 @@ export default function TokenDetailPage() {
             </div>
           </Card>
 
-          {/* Metadatos del token */}
+          {/* Metadatos del token - Reducido para dar espacio al diagrama */}
           <Card>
-            <div className="p-6">
-              <h3 className="text-lg font-semibold mb-4">Metadatos</h3>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <pre className="text-sm text-gray-800 whitespace-pre-wrap break-words font-mono">
+            <div className="p-4">
+              <h3 className="text-md font-semibold mb-2">Metadatos</h3>
+              <div className="bg-gray-50 rounded-lg p-3 max-h-48 overflow-y-auto">
+                <pre className="text-xs text-gray-800 whitespace-pre-wrap break-words font-mono">
                   {(() => {
                     try {
                       const parsed = JSON.parse(token.features);
@@ -324,14 +324,12 @@ export default function TokenDetailPage() {
           </Card>
 
           {/* Árbol de Trazabilidad */}
-          <Card>
-            <div className="p-6">
-              <TokenTraceabilityTree tokenId={token.id} />
-            </div>
-          </Card>
+          <div className="relative z-10 mb-0">
+            <TokenTraceabilityTree tokenId={tokenId!} />
+          </div>
 
           {/* Acciones */}
-          <div className="flex gap-3">
+          <div className="flex gap-3 mt-0">
             <Link href="/tokens">
               <Button variant="secondary">Volver a Mis tokens</Button>
             </Link>

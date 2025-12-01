@@ -62,6 +62,7 @@ export default function TransfersPage() {
   const [selectedRecipient, setSelectedRecipient] = useState('');
   const [transferAmount, setTransferAmount] = useState('');
   const [isCreatingTransfer, setIsCreatingTransfer] = useState(false);
+  const [processingTransfers, setProcessingTransfers] = useState<Set<number>>(new Set());
   
   // Detectar cambios de cuenta/rol y redirigir al dashboard
   const [previousAccount, setPreviousAccount] = useState<string | null>(account);
@@ -138,14 +139,16 @@ export default function TransfersPage() {
                   <Button
                     variant="primary"
                     onClick={() => handleAcceptTransfer(transfer.id)}
+                    disabled={processingTransfers.has(transfer.id)}
                   >
-                    Aceptar
+                    {processingTransfers.has(transfer.id) ? 'Procesando...' : 'Aceptar'}
                   </Button>
                   <Button
                     variant="secondary"
                     onClick={() => handleRejectTransfer(transfer.id)}
+                    disabled={processingTransfers.has(transfer.id)}
                   >
-                    Rechazar
+                    {processingTransfers.has(transfer.id) ? 'Procesando...' : 'Rechazar'}
                   </Button>
                 </div>
               ) : undefined,
@@ -157,11 +160,18 @@ export default function TransfersPage() {
           }
         }
         
-        // Separar pendientes del historial
-        const pending = allTransfers.filter(t => t.status === 'pending');
-        const history = allTransfers.filter(t => t.status !== 'pending')
+        // Separar pendientes del historial y ordenar ambas por fecha descendente
+        const pending = allTransfers
+          .filter(t => t.status === 'pending')
           .sort((a, b) => {
-            // Ordenar por fecha descendente
+            // Ordenar por fecha descendente (más recientes primero)
+            if (!a.createdAt || !b.createdAt) return 0;
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          });
+        const history = allTransfers
+          .filter(t => t.status !== 'pending')
+          .sort((a, b) => {
+            // Ordenar por fecha descendente (más recientes primero)
             if (!a.createdAt || !b.createdAt) return 0;
             return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
           });
@@ -288,14 +298,43 @@ export default function TransfersPage() {
 
   // Manejar aceptación de transferencia
   const handleAcceptTransfer = async (transferId: number) => {
+    // Prevenir doble clic
+    if (processingTransfers.has(transferId)) {
+      console.log('Transferencia ya está siendo procesada:', transferId);
+      return;
+    }
+
     try {
+      // Verificar estado actual de la transferencia antes de procesar
       const contractService = new ContractService();
+      const currentTransfer = await contractService.getTransfer(transferId);
+      
+      // Si ya no está pendiente, mostrar mensaje y recargar
+      if (currentTransfer.status !== 0) {
+        const statusText = currentTransfer.status === 1 ? 'aceptada' : 'rechazada';
+        showToast(`Esta transferencia ya fue ${statusText} por otra transacción.`, 'info');
+        // Forzar recarga
+        window.location.reload();
+        return;
+      }
+
+      // Agregar a procesamiento
+      setProcessingTransfers(prev => new Set(prev).add(transferId));
+      
       await contractService.acceptTransfer(transferId);
       showToast('Transferencia aceptada exitosamente', 'success');
       // La recarga se hará automáticamente via evento
     } catch (error: any) {
       const errorMessage = error?.message?.toLowerCase() || '';
       const errorCode = error?.code;
+      const errorData = error?.data || error?.error?.data;
+      
+      // Remover de procesamiento en caso de error
+      setProcessingTransfers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(transferId);
+        return newSet;
+      });
       
       if (
         errorCode === 4001 ||
@@ -307,21 +346,79 @@ export default function TransfersPage() {
         return;
       }
       
+      // Detectar errores específicos del contrato
+      if (
+        error?.code === 'TRANSFER_ALREADY_PROCESSED' ||
+        errorMessage.includes('transferalreadyprocessed') || 
+        errorMessage.includes('transfer already processed') ||
+        errorMessage.includes('ya fue procesada') ||
+        errorMessage.includes('0x247ff345') ||
+        (errorData && typeof errorData === 'string' && errorData.includes('0x247ff345'))
+      ) {
+        showToast('Esta transferencia ya fue procesada por otra transacción. La lista se actualizará automáticamente.', 'info');
+        // Forzar recarga después de un breve delay
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+        return;
+      }
+      
+      if (errorMessage.includes('nottransferrecipient') || 
+          errorMessage.includes('not transfer recipient')) {
+        showToast('No eres el destinatario de esta transferencia', 'error');
+        return;
+      }
+      
+      if (errorMessage.includes('insufficientbalance') || 
+          errorMessage.includes('insufficient balance')) {
+        showToast('El remitente no tiene suficiente balance para esta transferencia', 'error');
+        return;
+      }
+      
       console.error('Error al aceptar transferencia:', error);
-      showToast(error?.message || 'Error al aceptar la transferencia', 'error');
+      showToast(error?.message || 'Error al aceptar la transferencia. Por favor, verifica que la transferencia siga pendiente.', 'error');
     }
   };
 
   // Manejar rechazo de transferencia
   const handleRejectTransfer = async (transferId: number) => {
+    // Prevenir doble clic
+    if (processingTransfers.has(transferId)) {
+      console.log('Transferencia ya está siendo procesada:', transferId);
+      return;
+    }
+
     try {
+      // Verificar estado actual de la transferencia antes de procesar
       const contractService = new ContractService();
+      const currentTransfer = await contractService.getTransfer(transferId);
+      
+      // Si ya no está pendiente, mostrar mensaje y recargar
+      if (currentTransfer.status !== 0) {
+        const statusText = currentTransfer.status === 1 ? 'aceptada' : 'rechazada';
+        showToast(`Esta transferencia ya fue ${statusText} por otra transacción.`, 'info');
+        // Forzar recarga
+        window.location.reload();
+        return;
+      }
+
+      // Agregar a procesamiento
+      setProcessingTransfers(prev => new Set(prev).add(transferId));
+      
       await contractService.rejectTransfer(transferId);
       showToast('Transferencia rechazada', 'info');
       // La recarga se hará automáticamente via evento
     } catch (error: any) {
       const errorMessage = error?.message?.toLowerCase() || '';
       const errorCode = error?.code;
+      const errorData = error?.data || error?.error?.data;
+      
+      // Remover de procesamiento en caso de error
+      setProcessingTransfers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(transferId);
+        return newSet;
+      });
       
       if (
         errorCode === 4001 ||
@@ -333,8 +430,31 @@ export default function TransfersPage() {
         return;
       }
       
+      // Detectar errores específicos del contrato
+      if (
+        error?.code === 'TRANSFER_ALREADY_PROCESSED' ||
+        errorMessage.includes('transferalreadyprocessed') || 
+        errorMessage.includes('transfer already processed') ||
+        errorMessage.includes('ya fue procesada') ||
+        errorMessage.includes('0x247ff345') ||
+        (errorData && typeof errorData === 'string' && errorData.includes('0x247ff345'))
+      ) {
+        showToast('Esta transferencia ya fue procesada por otra transacción. La lista se actualizará automáticamente.', 'info');
+        // Forzar recarga después de un breve delay
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+        return;
+      }
+      
+      if (errorMessage.includes('nottransferrecipient') || 
+          errorMessage.includes('not transfer recipient')) {
+        showToast('No eres el destinatario de esta transferencia', 'error');
+        return;
+      }
+      
       console.error('Error al rechazar transferencia:', error);
-      showToast(error?.message || 'Error al rechazar la transferencia', 'error');
+      showToast(error?.message || 'Error al rechazar la transferencia. Por favor, verifica que la transferencia siga pendiente.', 'error');
     }
   };
 
@@ -503,7 +623,7 @@ export default function TransfersPage() {
                   type="submit"
                   disabled={isCreatingTransfer || !selectedRecipient || !transferAmount}
                 >
-                  {isCreatingTransfer ? 'Creando...' : 'Solicitar Transferencia'}
+                  {isCreatingTransfer ? 'Creando...' : 'Emitir Transferencia'}
                 </Button>
                 <Button
                   type="button"

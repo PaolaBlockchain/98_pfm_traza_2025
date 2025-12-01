@@ -251,20 +251,19 @@ export default function CreateTokenPage() {
   // Control de acceso: Requiere estado de registro aprobado
   if (status !== 'approved') return <p>Tu cuenta debe estar aprobada para crear tokens.</p>;
 
-  // Control de acceso: Consumer y Admin no pueden crear tokens
+  // Control de acceso: Consumer, Admin y Retailer no pueden crear tokens
   const isAdmin = role && role.toUpperCase() === 'ADMIN';
   const isConsumer = role && role.toUpperCase() === 'CONSUMER';
-  if (isAdmin || isConsumer) {
+  const isRetailer = role && role.toUpperCase() === 'RETAILER';
+  
+  if (isConsumer || isRetailer) {
+    const roleName = isConsumer ? 'consumidores' : 'retailers';
+    const roleNameCapitalized = isConsumer ? 'Consumidores' : 'Retailers';
     return (
       <section className="space-y-4">
         <Card className="p-6 border-yellow-300 bg-yellow-50">
           <p className="text-yellow-800 font-semibold mb-2">
-            {isAdmin 
-              ? '❌ Acceso denegado. Los administradores no pueden crear tokens.'
-              : '❌ Acceso denegado. Los consumidores no pueden crear tokens. Solo pueden recibir tokens mediante transferencias.'}
-          </p>
-          <p className="text-sm text-yellow-700 mb-4">
-            Por favor presiona el Dashboard si quieres ingresar al rol o Desconectar si quieres ingresar con otro rol.
+            ❌ Los {roleName} no pueden crear tokens, solo recibir tokens mediante transferencias.
           </p>
           <p className="text-xs text-yellow-600">
             Tu rol actual: {role}

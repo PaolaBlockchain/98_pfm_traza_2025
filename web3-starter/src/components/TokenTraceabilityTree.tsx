@@ -135,6 +135,8 @@ export default function TokenTraceabilityTree({ tokenId }: TokenTraceabilityTree
     const addresses = new Set<string>();
     collectAddresses(node, addresses);
 
+    console.log(`[loadUserRoles] Direcciones a cargar: ${Array.from(addresses).join(', ')}`);
+
     // Cargar roles para todas las direcciones
     const contractService = new ContractService();
     const rolePromises = Array.from(addresses).map(async (addr) => {
@@ -148,8 +150,16 @@ export default function TokenTraceabilityTree({ tokenId }: TokenTraceabilityTree
           4: 'CONSUMER',
         };
         const role = roleMap[userInfo.role] || 'UNKNOWN';
+        console.log(`[loadUserRoles] ✅ Dirección: ${addr}, Rol numérico: ${userInfo.role}, Rol mapeado: ${role}, Status: ${userInfo.status}`);
         return { address: addr, role };
-      } catch (error) {
+      } catch (error: any) {
+        // Si el usuario no existe o hay un error, loguear el error específico
+        console.error(`[loadUserRoles] ❌ Error al obtener rol para ${addr}:`, {
+          message: error?.message,
+          code: error?.code,
+          data: error?.data,
+          error: error
+        });
         return { address: addr, role: 'UNKNOWN' };
       }
     });
@@ -157,8 +167,12 @@ export default function TokenTraceabilityTree({ tokenId }: TokenTraceabilityTree
     const roles = await Promise.all(rolePromises);
     const newRolesMap = new Map<string, UserRoleInfo>();
     roles.forEach(({ address, role }) => {
-      newRolesMap.set(address, { role, address });
+      const key = address.toLowerCase();
+      newRolesMap.set(key, { role, address });
+      console.log(`[loadUserRoles] 📝 Guardando en mapa: ${key} -> ${role} (dirección original: ${address})`);
     });
+    console.log(`[loadUserRoles] ✅ Total de roles cargados: ${newRolesMap.size}`);
+    console.log(`[loadUserRoles] 📋 Mapa completo:`, Array.from(newRolesMap.entries()));
     setUserRoles(newRolesMap);
   };
 
@@ -255,10 +269,43 @@ export default function TokenTraceabilityTree({ tokenId }: TokenTraceabilityTree
     );
   };
 
-  const renderTransfer = (transfer: Transfer) => {
+  const renderTransfer = (transfer: Transfer, tokenName?: string, tokenTotalSupply?: number) => {
     const statusBadge = getStatusBadge(transfer.status);
-    const fromRole = userRoles.get(transfer.from.toLowerCase());
-    const toRole = userRoles.get(transfer.to.toLowerCase());
+    const fromAddressLower = transfer.from.toLowerCase();
+    const toAddressLower = transfer.to.toLowerCase();
+    const fromRole = userRoles.get(fromAddressLower);
+    const toRole = userRoles.get(toAddressLower);
+    
+    // Debug: verificar qué roles se están encontrando
+    console.log(`[renderTransfer] Transferencia #${transfer.id}:`);
+    console.log(`  - From: ${transfer.from} (lowercase: ${fromAddressLower})`);
+    console.log(`  - To: ${transfer.to} (lowercase: ${toAddressLower})`);
+    console.log(`  - FromRole encontrado:`, fromRole);
+    console.log(`  - ToRole encontrado:`, toRole);
+    console.log(`  - Mapa userRoles tiene ${userRoles.size} entradas`);
+    console.log(`  - Claves en mapa:`, Array.from(userRoles.keys()));
+    
+    // Crear texto descriptivo - siempre usar el rol real del ROLE_CONFIG, nunca "Usuario"
+    let fromRoleLabel = 'Desconocido';
+    if (fromRole && fromRole.role) {
+      const roleConfig = ROLE_CONFIG[fromRole.role];
+      fromRoleLabel = roleConfig?.label || fromRole.role;
+      console.log(`  - FromRoleLabel: ${fromRoleLabel} (de rol: ${fromRole.role})`);
+    } else {
+      console.warn(`  ⚠️ Rol no encontrado en mapa para dirección ${transfer.from} (${fromAddressLower})`);
+      console.warn(`  - Mapa contiene:`, Array.from(userRoles.entries()));
+    }
+    
+    let toRoleLabel = 'Desconocido';
+    if (toRole && toRole.role) {
+      const roleConfig = ROLE_CONFIG[toRole.role];
+      toRoleLabel = roleConfig?.label || toRole.role;
+      console.log(`  - ToRoleLabel: ${toRoleLabel} (de rol: ${toRole.role})`);
+    } else {
+      console.warn(`  ⚠️ Rol no encontrado en mapa para dirección ${transfer.to} (${toAddressLower})`);
+    }
+    
+    const descriptiveText = `El ${fromRoleLabel} le envía al ${toRoleLabel} ${transfer.amount.toLocaleString()} unidades${tokenName ? ` de ${tokenName}` : ''}${tokenTotalSupply ? ` de su suministro total de ${tokenTotalSupply.toLocaleString()} unidades` : ''}`;
     
     return (
       <Card key={transfer.id} className="ml-8 mb-3 p-4 bg-gradient-to-r from-gray-50 to-white border-l-4 border-blue-400 shadow-sm">
@@ -272,6 +319,13 @@ export default function TokenTraceabilityTree({ tokenId }: TokenTraceabilityTree
             <span className={`text-xs px-3 py-1 rounded-full font-semibold border ${statusBadge.className}`}>
               {statusBadge.icon} {statusBadge.text}
             </span>
+          </div>
+
+          {/* Texto descriptivo */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <p className="text-sm text-gray-800 font-medium leading-relaxed">
+              {descriptiveText}
+            </p>
           </div>
 
           {/* Información de envío */}
@@ -324,6 +378,9 @@ export default function TokenTraceabilityTree({ tokenId }: TokenTraceabilityTree
     const creatorRole = userRoles.get(node.token.creator.toLowerCase());
     const creatorConfig = creatorRole ? ROLE_CONFIG[creatorRole.role] : null;
     const CreatorIcon = creatorConfig?.icon || Leaf;
+    
+    // Si es token raíz y no tenemos el rol todavía, intentar obtenerlo
+    const isRootToken = node.token.parentId === 0;
 
     return (
       <div key={node.token.id} className="mb-4">
@@ -360,10 +417,10 @@ export default function TokenTraceabilityTree({ tokenId }: TokenTraceabilityTree
                       {node.token.parentId === 0 && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700 border border-green-300">
                           <Leaf size={12} />
-                          Token Raíz
+                          Token Raíz{creatorConfig ? ` (${creatorConfig.label})` : creatorRole ? ` (${ROLE_CONFIG[creatorRole.role]?.label || creatorRole.role})` : ''}
                         </span>
                       )}
-                      {creatorConfig && (
+                      {node.token.parentId !== 0 && creatorConfig && (
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${creatorConfig.bgColor} ${creatorConfig.color} border`}>
                           <CreatorIcon size={12} />
                           {creatorConfig.label}
@@ -429,7 +486,9 @@ export default function TokenTraceabilityTree({ tokenId }: TokenTraceabilityTree
                   </h4>
                 </div>
                 <div className="space-y-2">
-                  {node.transfers.map(transfer => renderTransfer(transfer))}
+                  {[...node.transfers]
+                    .sort((a, b) => b.dateCreated - a.dateCreated) // Ordenar por fecha descendente (más recientes primero)
+                    .map(transfer => renderTransfer(transfer, node.token.name, node.token.totalSupply))}
                 </div>
               </div>
             )}

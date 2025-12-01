@@ -606,29 +606,44 @@ export class ContractService {
     } catch (error: any) {
       console.error('Error al aceptar transferencia:', error);
       
-      if (error?.message?.includes('TransferDoesNotExist')) {
-        throw new Error('La transferencia no existe');
-      }
-      if (error?.message?.includes('TransferAlreadyProcessed')) {
-        throw new Error('La transferencia ya fue procesada');
-      }
-      if (error?.message?.includes('NotTransferRecipient')) {
-        throw new Error('Solo el receptor puede aceptar esta transferencia');
-      }
-      if (error?.message?.includes('InsufficientBalance')) {
-        throw new Error('El emisor ya no tiene suficiente balance');
-      }
-      
-      // Detectar cancelación del usuario
+      // Detectar cancelación del usuario primero
       const errorMessage = error?.message?.toLowerCase() || '';
       const errorCode = error?.code;
+      const errorData = error?.data || error?.error?.data || '';
+      const errorReason = error?.reason || '';
+      
       if (
         errorCode === 4001 ||
         errorCode === 'ACTION_REJECTED' ||
         errorMessage.includes('user denied') ||
         errorMessage.includes('user rejected')
       ) {
-        throw error;
+        const cancelledError = new Error('MetaMask_User_Cancelled');
+        (cancelledError as any).code = 4001;
+        throw cancelledError;
+      }
+      
+      // Detectar TransferAlreadyProcessed por código de error o mensaje
+      if (
+        errorMessage.includes('transferalreadyprocessed') ||
+        errorMessage.includes('transfer already processed') ||
+        errorReason.includes('TransferAlreadyProcessed') ||
+        (typeof errorData === 'string' && errorData.includes('0x247ff345')) ||
+        (error?.data && typeof error?.data === 'string' && error.data.includes('0x247ff345'))
+      ) {
+        const alreadyProcessedError = new Error('Esta transferencia ya fue procesada por otra transacción');
+        (alreadyProcessedError as any).code = 'TRANSFER_ALREADY_PROCESSED';
+        throw alreadyProcessedError;
+      }
+      
+      if (error?.message?.includes('TransferDoesNotExist')) {
+        throw new Error('La transferencia no existe');
+      }
+      if (error?.message?.includes('NotTransferRecipient')) {
+        throw new Error('Solo el receptor puede aceptar esta transferencia');
+      }
+      if (error?.message?.includes('InsufficientBalance')) {
+        throw new Error('El emisor ya no tiene suficiente balance');
       }
       
       throw error;
@@ -655,26 +670,41 @@ export class ContractService {
     } catch (error: any) {
       console.error('Error al rechazar transferencia:', error);
       
-      if (error?.message?.includes('TransferDoesNotExist')) {
-        throw new Error('La transferencia no existe');
-      }
-      if (error?.message?.includes('TransferAlreadyProcessed')) {
-        throw new Error('La transferencia ya fue procesada');
-      }
-      if (error?.message?.includes('NotTransferRecipient')) {
-        throw new Error('Solo el receptor puede rechazar esta transferencia');
-      }
-      
-      // Detectar cancelación del usuario
+      // Detectar cancelación del usuario primero
       const errorMessage = error?.message?.toLowerCase() || '';
       const errorCode = error?.code;
+      const errorData = error?.data || error?.error?.data || '';
+      const errorReason = error?.reason || '';
+      
       if (
         errorCode === 4001 ||
         errorCode === 'ACTION_REJECTED' ||
         errorMessage.includes('user denied') ||
         errorMessage.includes('user rejected')
       ) {
-        throw error;
+        const cancelledError = new Error('MetaMask_User_Cancelled');
+        (cancelledError as any).code = 4001;
+        throw cancelledError;
+      }
+      
+      // Detectar TransferAlreadyProcessed por código de error o mensaje
+      if (
+        errorMessage.includes('transferalreadyprocessed') ||
+        errorMessage.includes('transfer already processed') ||
+        errorReason.includes('TransferAlreadyProcessed') ||
+        (typeof errorData === 'string' && errorData.includes('0x247ff345')) ||
+        (error?.data && typeof error?.data === 'string' && error.data.includes('0x247ff345'))
+      ) {
+        const alreadyProcessedError = new Error('Esta transferencia ya fue procesada por otra transacción');
+        (alreadyProcessedError as any).code = 'TRANSFER_ALREADY_PROCESSED';
+        throw alreadyProcessedError;
+      }
+      
+      if (error?.message?.includes('TransferDoesNotExist')) {
+        throw new Error('La transferencia no existe');
+      }
+      if (error?.message?.includes('NotTransferRecipient')) {
+        throw new Error('Solo el receptor puede rechazar esta transferencia');
       }
       
       throw error;
@@ -933,7 +963,8 @@ export class ContractService {
         }
       }
 
-      return tokenTransfers.sort((a, b) => a.dateCreated - b.dateCreated);
+      // Ordenar por fecha descendente (más recientes primero)
+      return tokenTransfers.sort((a, b) => b.dateCreated - a.dateCreated);
     } catch (error) {
       console.error('Error al obtener transferencias del token:', error);
       return [];

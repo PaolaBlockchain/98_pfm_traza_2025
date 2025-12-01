@@ -467,6 +467,7 @@ contract SupplyChain {
         if (u.status != UserStatus.Approved) revert CreatorNotApproved();
         if (u.rol == Roles.Admin) revert RoleNotAllowedToCreateToken();
         if (u.rol == Roles.Consumer) revert RoleNotAllowedToCreateToken();
+        if (u.rol == Roles.Retailer) revert RoleNotAllowedToCreateToken();
         if (totalSupply == 0) revert ZeroSupply();
 
         if (parentId != 0) {
