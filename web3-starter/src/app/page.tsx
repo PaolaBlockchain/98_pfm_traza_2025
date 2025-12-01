@@ -12,7 +12,6 @@
 
 "use client";
 import React from 'react';
-import { useRouter } from 'next/navigation';
 import { AlertCircle, Ban, Clock } from 'lucide-react';
 import { useWallet } from '@/hooks/useWallet';
 import { Button } from '@/components/ui/button';
@@ -20,7 +19,6 @@ import { Card } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { ContractService } from '@/lib/contractService';
-import { RequestHistoryService } from '@/lib/requestHistoryService';
 
 // Opciones disponibles de roles en el sistema
 const ROLE_OPTIONS = [
@@ -47,7 +45,6 @@ const ROLE_TO_ID: Record<string, number> = {
 export default function HomePage() {
   // Estado global de la wallet y funciones de control
   const { account, status, role, setRole, setStatus, connect } = useWallet();
-  const router = useRouter();
 
   // Determinar el estado de la interfaz de usuario basado en conexión y estado de registro
   const uiState = !account
@@ -62,93 +59,18 @@ export default function HomePage() {
     ? 'connected-rejected'
     : 'connected-canceled';
 
-  // Redirección automática al dashboard si está aprobado o es admin
+  // Redirección automática al dashboard si está aprobado
   React.useEffect(() => {
-    console.log('🔄 Verificando redirección:', { status, account, role });
-    
-    // Solo redirigir si tenemos status y role confirmados (no valores vacíos o 'unregistered')
-    if (status === 'approved' && account && role && role !== '') {
-      console.log('✅ Usuario aprobado, redirigiendo...');
-      
-      // Pequeño delay para asegurar que todo está sincronizado
-      const timer = setTimeout(() => {
-        // Redirigir a admin dashboard si es admin, sino a dashboard normal
-        if (role === 'ADMIN') {
-          console.log('👑 Redirigiendo a /admin/users');
-          router.push('/admin/users');
-        } else {
-          console.log('👤 Redirigiendo a /dashboard');
-          router.push('/dashboard');
-        }
-      }, 300);
-      
-      return () => clearTimeout(timer);
+    if (uiState === 'connected-approved') {
+      window.location.href = '/dashboard';
     }
-  }, [status, account, role, router]);
+  }, [uiState]);
 
   return (
     <section className="space-y-8">
-      {/* Mostrar alerta de rechazo si el usuario fue rechazado */}
-      {status === 'rejected' && account && (
-        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
-          <div className="flex items-start gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-red-100 text-red-600">
-              <AlertCircle className="h-5 w-5" />
-            </span>
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold text-red-800 mb-2">
-                ❌ Tu solicitud anterior fue rechazada
-              </h3>
-              <p className="text-sm text-red-700 mb-2">
-                La wallet <span className="font-mono bg-red-100 px-2 py-1 rounded text-xs">{account.slice(0, 10)}...</span> fue rechazada por el administrador.
-              </p>
-              <p className="text-xs text-red-600 italic">
-                Puedes enviar una nueva solicitud seleccionando un rol a continuación.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Mostrar alerta si el usuario canceló su solicitud */}
-      {status === 'canceled' && account && (
-        <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-6">
-          <div className="flex items-start gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-yellow-100 text-yellow-600">
-              <Ban className="h-5 w-5" />
-            </span>
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold text-yellow-800 mb-2">
-                Solicitud cancelada
-              </h3>
-              <p className="text-sm text-yellow-700 mb-2">
-                Cancelaste tu solicitud anterior. Puedes volver a solicitar acceso cuando lo desees.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Estado: Usuario no conectado, sin registrar, rechazado o cancelado - mostrar selector de rol */}
-      {(uiState === 'not-connected' || 
-        uiState === 'connected-unregistered' || 
-        uiState === 'connected-rejected' || 
-        uiState === 'connected-canceled') && (
-        <Card 
-          title={
-            uiState === 'connected-rejected' ? "🔄 Nueva Solicitud de Rol" :
-            uiState === 'connected-canceled' ? "Nueva Solicitud de Rol" :
-            uiState === 'not-connected' ? "Selecciona tu rol" : 
-            "Solicitud de Rol"
-          } 
-          subtitle={
-            uiState === 'connected-rejected' ? "Completa el formulario nuevamente" :
-            uiState === 'connected-canceled' ? "Vuelve a solicitar acceso" :
-            uiState === 'not-connected' ? "Para comenzar" : 
-            "Esperando envío"
-          } 
-          contentClassName="space-y-5"
-        >
+      {/* Estado: Usuario no conectado - mostrar selector de rol */}
+      {(uiState === 'not-connected' || uiState === 'connected-unregistered') && (
+        <Card title={uiState === 'not-connected' ? "Selecciona tu rol" : "Solicitud de Rol"} subtitle={uiState === 'not-connected' ? "Para comenzar" : "Esperando envío"} contentClassName="space-y-5">
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <Label htmlFor="role">Selecciona rol</Label>
@@ -156,6 +78,7 @@ export default function HomePage() {
                 id="role"
                 value={role}
                 onChange={(event) => setRole(event.target.value)}
+                disabled={!account}
               >
                 {ROLE_OPTIONS.map((option) => (
                   <option key={option.value || 'placeholder'} value={option.value}>
@@ -166,28 +89,11 @@ export default function HomePage() {
             </div>
             {/* Lista de verificación informativa para el usuario */}
             <div className="rounded-md border border-gray-200 bg-white p-4 text-xs text-gray-600">
-              <p className="font-mono uppercase tracking-[0.28em] text-gray-400 mb-3">Lista de verificación</p>
-              <ul className="mt-2 space-y-2 text-[0.65rem] text-gray-700">
-                <li className="flex items-start gap-2">
-                  <span className={`flex-shrink-0 ${account ? 'text-green-600' : 'text-gray-400'}`}>
-                    {account ? '✓' : '1.'}
-                  </span>
-                  <span className={account ? 'line-through text-gray-400' : ''}>
-                    Conectar a MetaMask
-                  </span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className={`flex-shrink-0 ${account && role ? 'text-green-600' : 'text-gray-400'}`}>
-                    {account && role ? '✓' : '2.'}
-                  </span>
-                  <span className={account && role ? 'line-through text-gray-400' : ''}>
-                    Seleccionar rol
-                  </span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="flex-shrink-0 text-gray-400">3.</span>
-                  <span>Enviar solicitud</span>
-                </li>
+              <p className="font-mono uppercase tracking-[0.28em] text-gray-400">Lista de verificación</p>
+              <ul className="mt-2 space-y-1 font-mono text-[0.6rem] uppercase tracking-[0.25em] text-gray-600">
+                <li>• Usa cuenta asignada al rol</li>
+                <li>• Verifica red 31337</li>
+                <li>• Confirma datos antes de enviar</li>
               </ul>
             </div>
           </div>
@@ -225,40 +131,10 @@ export default function HomePage() {
                 // Actualizar estado local después de transacción exitosa
                 setStatus('pending');
 
-              } catch (error: any) {
-                // Detectar si el usuario canceló la transacción en MetaMask
-                if (error?.code === 4001 || 
-                    error?.code === 'ACTION_REJECTED' ||
-                    error?.message?.includes('User denied') || 
-                    error?.message?.includes('user rejected') || 
-                    error?.message?.includes('User rejected') ||
-                    error?.message?.includes('canceled') ||
-                    error?.message?.includes('cancelled')) {
-                  console.log('Usuario canceló la transacción en MetaMask');
-                  // No mostrar alert, solo registrar en consola
-                  return;
-                }
-                
-                // Detectar errores de conexión con Anvil/red local
-                if (error?.code === 'NETWORK_ERROR' ||
-                    error?.message?.includes('could not detect network') ||
-                    error?.message?.includes('network does not support') ||
-                    error?.message?.includes('missing provider') ||
-                    error?.code === -32603 ||
-                    error?.message?.includes('Internal JSON-RPC error') ||
-                    error?.message?.includes('Failed to fetch') ||
-                    error?.message?.includes('fetch failed')) {
-                  console.error('Error de conexión con la red local:', error);
-                  alert('⚠️ No se puede conectar con la blockchain local (Anvil).\n\n' +
-                        'Verifica que:\n' +
-                        '1. Anvil está ejecutándose (anvil)\n' +
-                        '2. El puerto 8545 está disponible\n' +
-                        '3. MetaMask está configurado para red 31337');
-                  return;
-                }
-                
-                // Para otros errores, sí loguear y mostrar mensaje al usuario
+              } catch (error: unknown) {
                 console.error('Error al registrar usuario:', error);
+                
+                // Mostrar mensaje de error al usuario
                 if (error instanceof Error) {
                   alert(`Error al registrar: ${error.message}`);
                 } else {
@@ -266,8 +142,8 @@ export default function HomePage() {
                 }
               }
             }
-          }} disabled={!account || !role} className="justify-center">
-            Emitir solicitud
+          }} disabled={!role} className="justify-center">
+            {uiState === 'not-connected' ? 'Conectar y solicitar' : 'Emitir solicitud'}
           </Button>
         </Card>
       )}
@@ -283,32 +159,16 @@ export default function HomePage() {
               Hemos recibido tu solicitud. Cuando el administrador confirme el rol podrás acceder al panel completo.
             </p>
           </div>
-          {/* Botón para cancelar la solicitud pendiente (solo si está en estado Pending) */}
+          {/* Botón para cancelar la solicitud pendiente */}
           <Button
             onClick={async () => {
               try {
                 const contractService = new ContractService();
                 await contractService.cancelMyAccount();
-                console.log('Solicitud cancelada en el contrato');
-                
-                // Registrar cancelación en historial para trazabilidad
-                if (account) {
-                  RequestHistoryService.addEntry({
-                    address: account,
-                    action: 'canceled',
-                  });
-                }
-                
-                // Actualizar estado local
-                setRole('');
-                setStatus('canceled');
-              } catch (error: any) {
-                console.error('Error al cancelar solicitud:', error);
-                if (error instanceof Error) {
-                  alert(`Error al cancelar: ${error.message}`);
-                } else {
-                  alert('Error desconocido al cancelar solicitud');
-                }
+                // El evento UserStatusChanged actualizará Web3Context automáticamente
+              } catch (error) {
+                console.error('Error al cancelar cuenta:', error);
+                alert('Error al cancelar la solicitud. Verifica la consola.');
               }
             }}
             className="mt-4 w-full justify-center"
@@ -316,6 +176,38 @@ export default function HomePage() {
           >
             Cancelar solicitud
           </Button>
+        </Card>
+      )}
+
+      {/* Estado: Solicitud rechazada por el admin */}
+      {uiState === 'connected-rejected' && (
+        <Card title="Solicitud rechazada" subtitle="Acción requerida">
+          <div className="flex items-start gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-500">
+              <AlertCircle className="h-4 w-4" />
+            </span>
+            <p className="text-xs leading-relaxed text-gray-500">
+              El administrador rechazó tu solicitud. Revisa tu información, ajusta los datos necesarios y vuelve a enviar el registro.
+            </p>
+          </div>
+          {/* Botón para reiniciar el proceso de registro */}
+          <Button variant="secondary" onClick={() => setStatus('unregistered')} className="mt-4 w-full justify-center">
+            Reiniciar registro
+          </Button>
+        </Card>
+      )}
+
+      {/* Estado: Solicitud cancelada por el usuario */}
+      {uiState === 'connected-canceled' && (
+        <Card title="Registro cancelado" subtitle="No puedes volver a registrarte">
+          <div className="flex items-start gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-500">
+              <Ban className="h-4 w-4" />
+            </span>
+            <p className="text-xs leading-relaxed text-gray-600">
+              Has cancelado tu solicitud de registro. El estado de tu cuenta es permanente y no puedes volver a solicitar un rol con esta dirección. Si necesitas participar en la cadena de suministro, deberás usar una cuenta diferente.
+            </p>
+          </div>
         </Card>
       )}
     </section>
