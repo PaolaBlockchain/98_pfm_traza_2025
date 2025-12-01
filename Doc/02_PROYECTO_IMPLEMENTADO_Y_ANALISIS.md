@@ -109,15 +109,15 @@ Confieso que implementar la lógica de roles y permisos en el frontend fue uno d
 ```
 
 ### 2.4.1 Roles Disponibles
-```
-| Rol | ID | Descripción | Permisos |
-|-----|----|-----------|---------| 
-| **Admin** | 0 | Administrador del sistema | Control total: aprobar/rechazar usuarios, cambiar roles, gestionar permisos |
-| **Producer** | 1 | Productor de materias primas | Crear y gestionar productos iniciales en la cadena |
-| **Factory** | 2 | Procesador/Fabricante | Transformar materias primas en productos |
-| **Retailer** | 3 | Distribuidor/Minorista | Distribución y venta de productos |
-| **Consumer** | 4 | Consumidor final | Consultar trazabilidad de productos |
-```
+
+| Rol          | ID | Descripción               | Permisos                                                 |
+|--------------|----|---------------------------|----------------------------------------------------------|
+| **Admin**    | 0  | Administrador del sistema | Control total: aprobar/rechazar usuarios, cambiar roles, |
+                      gestionar permisos                                                                   |
+| **Producer** | 1  | Productor de materias primas | Crear y gestionar productos iniciales en la cadena    |
+| **Factory**  | 2  | Procesador/Fabricante | Transformar materias primas en productos                     |
+| **Retailer** | 3  | Distribuidor/Minorista | Distribución y venta de productos                           |
+| **Consumer** | 4  | Consumidor final | Consultar trazabilidad de productos                               |
 
 ### 2.4.2 Restricciones de Roles
 ```
@@ -162,12 +162,12 @@ Confieso que implementar la lógica de roles y permisos en el frontend fue uno d
 ### 2.5.1 Descripción de Estados
 ```
 
-| Estado | Valor | Descripción | Estado Terminal |
-|--------|-------|-------------|----------------|
-| **Pending** | 0 | Usuario registrado esperando aprobación del admin | No |
-| **Approved** | 1 | Usuario activo con permisos completos | No |
-| **Rejected** | 2 | Usuario rechazado por admin | No |
-| **Canceled** | 3 | Usuario canceló su cuenta o fue dado de baja | Sí |
+| Estado       | Valor | Descripción                                       | Estado Terminal |
+|------------  |-------|---------------------------------------------------|-----------------|
+| **Pending**  | 0     | Usuario registrado esperando aprobación del admin | No              |
+| **Approved** | 1     | Usuario activo con permisos completos             | No              |
+| **Rejected** | 2     | Usuario rechazado por admin                       | No              |
+| **Canceled** | 3     | Usuario canceló su cuenta o fue dado de baja      | Sí              |
 ```
 
 ## 2.6 Prerrequisitos e Instalación
@@ -182,8 +182,7 @@ Para información detallada sobre prerequisitos, instalación y configuración d
 ```
 
 ## 2.7 Flujos de Trabajo
-```
-```
+
 ### 2.7.1 Validación de Flujos Implementados
 ```
 
@@ -209,8 +208,6 @@ Todos los flujos de trabajo solicitados están correctamente implementados y val
 ```
 
 ## 2.8 Errores Comunes y Soluciones
-```
-```
 
 ### 2.8.1 Errores relacionados con Forge / tests de Solidity
 ```
@@ -288,10 +285,7 @@ Se agregaron pruebas unitarias exhaustivas para el smart contract utilizando Fou
 Consulta el archivo **[04_CASOS_DE_USO.md](./04_CASOS_DE_USO.md)** para ver los casos de prueba detallados.
 ```
 
-
 ## 2.10 Seguridad y Buenas Prácticas
-```
-```
 
 ### 2.10.1 Validaciones Implementadas
 ```
