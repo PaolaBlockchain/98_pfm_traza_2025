@@ -420,4 +420,3 @@ Validar que solo se permiten transferencias según el flujo de roles.
 **Proyecto:** Sistema de Trazabilidad Supply Chain
 
 **Nota:** Este documento refleja fielmente el código implementado y funcionando (contrato + frontend). No incluye funcionalidades que solo existan en el smart contract sin interfaz de usuario correspondiente.
-
