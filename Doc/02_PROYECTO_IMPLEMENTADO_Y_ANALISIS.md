@@ -371,6 +371,8 @@ Consulta el archivo **[04_CASOS_DE_USO.md](./04_CASOS_DE_USO.md)** para ver los 
 - **[03_GUIA_TECNICA_INSTALACION.md](./03_GUIA_TECNICA_INSTALACION.md)** - Guía técnica de instalación
 - **[04_CASOS_DE_USO.md](./04_CASOS_DE_USO.md)** - Casos de uso adicionales
 - **[05_IA.md](./05_IA.md)** - Documentación sobre el uso de IA en el proyecto
+- **Presentación del Proyecto** - Archivo PPTX en la carpeta Doc: `PresentacionProyectoFinalSolidity.pptx`
+- **Link del video** - https://drive.google.com/drive/u/0/folders/1H8JOGrgOJAsAPbMy6G5Hchumge6Yx11-
 ---
 
 *Documento actualizado el 1 de diciembre de 2025 por PaolaBlockchain y GitHub Copilot. Si tienes dudas, sugerencias o quieres compartir tu experiencia, ¡no dudes en contactarme!*

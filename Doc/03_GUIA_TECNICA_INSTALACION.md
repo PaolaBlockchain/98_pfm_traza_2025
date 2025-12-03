@@ -29,8 +29,8 @@ https://metamask.io/download/
 
 # 2. 📦 Clonar proyecto
 ```bash
-git clone <URL_DEL_REPO>
-cd 98_pfm_traza_2025
+git clone Uhttps://github.com/PaolaBlockchain/proyectoFinalSolity
+cd proyectoFinalSolity
 ```
 
 # 3. ⚙️ Configuración Backend
