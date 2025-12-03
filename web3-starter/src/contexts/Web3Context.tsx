@@ -58,16 +58,25 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
     const savedStatus = parseStoredStatus(window.localStorage.getItem(STORAGE_KEYS.status));
 
     // Si no hay cuenta almacenada, resetear todo el estado
+    // IMPORTANTE: No auto-conectar cuentas de MetaMask si el localStorage está limpio
+    // Esto asegura que después de un reset, el usuario vea la página de bienvenida
     if (!savedAccount) {
       setAccount(null);
       setStatus('unregistered');
       setRole('');
+      setManuallyDisconnected(true); // Marcar como desconectado manualmente para evitar auto-conexión
+      console.log('🔄 localStorage limpio - Estado reseteado. Mostrando página de bienvenida.');
       return;
     }
 
-    if (savedAccount) setAccount(savedAccount);
-    setRole(savedRole);
-    setStatus(savedStatus);
+    // Solo restaurar estado si hay cuenta guardada en localStorage
+    // Esto previene que MetaMask auto-conecte después de un reset
+    if (savedAccount) {
+      setAccount(savedAccount);
+      setRole(savedRole);
+      setStatus(savedStatus);
+      setManuallyDisconnected(false); // Si hay cuenta guardada, permitir auto-conexión
+    }
   }, []);
 
   useEffect(() => {
@@ -332,9 +341,21 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
 
     (async () => {
       // No auto-conectar cuentas existentes, solo verificar chainId
+      // IMPORTANTE: Si manuallyDisconnected es true, no intentar conectar cuentas
+      // Esto asegura que después de un reset, no se auto-conecte MetaMask
+      if (manuallyDisconnected) {
+        try {
+          const chainHex = await eth.request({ method: 'eth_chainId' });
+          setChainId(parseInt(chainHex as string, 16));
+        } catch {
+          setChainId(null);
+        }
+        return; // No verificar cuentas si fue desconectado manualmente
+      }
+      
       try {
         const chainHex = await eth.request({ method: 'eth_chainId' });
-  setChainId(parseInt(chainHex as string, 16));
+        setChainId(parseInt(chainHex as string, 16));
       } catch {
         setChainId(null);
       }

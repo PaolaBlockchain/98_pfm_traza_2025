@@ -130,12 +130,29 @@ export default function TokenTraceabilityTree({ tokenId }: TokenTraceabilityTree
     });
   };
 
+  // Función recursiva para obtener el creador de tokens raíz
+  const getRootTokenCreator = (node: TokenNode): string | null => {
+    if (node.token.parentId === 0) {
+      return node.token.creator;
+    }
+    if (node.parent) {
+      return getRootTokenCreator(node.parent);
+    }
+    return null;
+  };
+
   // Función para cargar roles de todas las direcciones en el árbol
   const loadUserRoles = async (node: TokenNode) => {
     const addresses = new Set<string>();
     collectAddresses(node, addresses);
+    
+    // Obtener el creador del token raíz si existe
+    const rootCreator = getRootTokenCreator(node);
 
     console.log(`[loadUserRoles] Direcciones a cargar: ${Array.from(addresses).join(', ')}`);
+    if (rootCreator) {
+      console.log(`[loadUserRoles] Creador del token raíz: ${rootCreator}`);
+    }
 
     // Cargar roles para todas las direcciones
     const contractService = new ContractService();
@@ -153,7 +170,12 @@ export default function TokenTraceabilityTree({ tokenId }: TokenTraceabilityTree
         console.log(`[loadUserRoles] ✅ Dirección: ${addr}, Rol numérico: ${userInfo.role}, Rol mapeado: ${role}, Status: ${userInfo.status}`);
         return { address: addr, role };
       } catch (error: any) {
-        // Si el usuario no existe o hay un error, loguear el error específico
+        // Si el usuario no existe o hay un error
+        // Si es el creador del token raíz, asumir que es Producer
+        if (rootCreator && addr.toLowerCase() === rootCreator.toLowerCase()) {
+          console.log(`[loadUserRoles] ⚠️ No se pudo obtener rol para creador del token raíz ${addr}, asumiendo Producer`);
+          return { address: addr, role: 'PRODUCER' };
+        }
         console.error(`[loadUserRoles] ❌ Error al obtener rol para ${addr}:`, {
           message: error?.message,
           code: error?.code,
@@ -254,22 +276,32 @@ export default function TokenTraceabilityTree({ tokenId }: TokenTraceabilityTree
     return { text: 'Rechazada', className: 'bg-red-100 text-red-800 border-red-300', icon: '✗' };
   };
 
-  const getRoleBadge = (address: string) => {
-    const roleInfo = userRoles.get(address.toLowerCase());
-    if (!roleInfo) return null;
+  const getRoleBadge = (address: string, isTokenCreator: boolean = false, isRootToken: boolean = false) => {
+    let roleInfo = userRoles.get(address.toLowerCase());
+    
+    // Si es el creador de un token raíz y no tenemos el rol, asumir Producer
+    if (isTokenCreator && isRootToken && (!roleInfo || roleInfo.role === 'UNKNOWN')) {
+      roleInfo = { role: 'PRODUCER', address };
+      // Actualizar el mapa
+      if (!userRoles.has(address.toLowerCase())) {
+        setUserRoles(prev => new Map(prev).set(address.toLowerCase(), roleInfo!));
+      }
+    }
+    
+    if (!roleInfo || roleInfo.role === 'UNKNOWN') return null;
     
     const config = ROLE_CONFIG[roleInfo.role] || ROLE_CONFIG.ADMIN;
     const IconComponent = config.icon;
     
     return (
-      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${config.bgColor} ${config.color} border`}>
-        <IconComponent size={12} />
+      <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-semibold ${config.bgColor} ${config.color} border`}>
+        <IconComponent size={10} />
         {config.label}
       </span>
     );
   };
 
-  const renderTransfer = (transfer: Transfer, tokenName?: string, tokenTotalSupply?: number) => {
+  const renderTransfer = (transfer: Transfer, tokenName?: string, tokenTotalSupply?: number, tokenCreator?: string, isRootToken?: boolean) => {
     const statusBadge = getStatusBadge(transfer.status);
     const fromAddressLower = transfer.from.toLowerCase();
     const toAddressLower = transfer.to.toLowerCase();
@@ -287,17 +319,27 @@ export default function TokenTraceabilityTree({ tokenId }: TokenTraceabilityTree
     
     // Crear texto descriptivo - siempre usar el rol real del ROLE_CONFIG, nunca "Usuario"
     let fromRoleLabel = 'Desconocido';
-    if (fromRole && fromRole.role) {
+    if (fromRole && fromRole.role && fromRole.role !== 'UNKNOWN') {
       const roleConfig = ROLE_CONFIG[fromRole.role];
       fromRoleLabel = roleConfig?.label || fromRole.role;
       console.log(`  - FromRoleLabel: ${fromRoleLabel} (de rol: ${fromRole.role})`);
     } else {
-      console.warn(`  ⚠️ Rol no encontrado en mapa para dirección ${transfer.from} (${fromAddressLower})`);
-      console.warn(`  - Mapa contiene:`, Array.from(userRoles.entries()));
+      // Si no se encontró el rol pero es el creador de un token raíz, asumir Producer
+      if (isRootToken && tokenCreator && fromAddressLower === tokenCreator.toLowerCase()) {
+        fromRoleLabel = 'Producer';
+        console.log(`  - FromRoleLabel: Producer (inferido para creador de token raíz)`);
+        // Actualizar el mapa para futuras referencias
+        if (!userRoles.has(fromAddressLower)) {
+          setUserRoles(prev => new Map(prev).set(fromAddressLower, { role: 'PRODUCER', address: transfer.from }));
+        }
+      } else {
+        console.warn(`  ⚠️ Rol no encontrado en mapa para dirección ${transfer.from} (${fromAddressLower})`);
+        console.warn(`  - Mapa contiene:`, Array.from(userRoles.entries()));
+      }
     }
     
     let toRoleLabel = 'Desconocido';
-    if (toRole && toRole.role) {
+    if (toRole && toRole.role && toRole.role !== 'UNKNOWN') {
       const roleConfig = ROLE_CONFIG[toRole.role];
       toRoleLabel = roleConfig?.label || toRole.role;
       console.log(`  - ToRoleLabel: ${toRoleLabel} (de rol: ${toRole.role})`);
@@ -308,60 +350,60 @@ export default function TokenTraceabilityTree({ tokenId }: TokenTraceabilityTree
     const descriptiveText = `El ${fromRoleLabel} le envía al ${toRoleLabel} ${transfer.amount.toLocaleString()} unidades${tokenName ? ` de ${tokenName}` : ''}${tokenTotalSupply ? ` de su suministro total de ${tokenTotalSupply.toLocaleString()} unidades` : ''}`;
     
     return (
-      <Card key={transfer.id} className="ml-8 mb-3 p-4 bg-gradient-to-r from-gray-50 to-white border-l-4 border-blue-400 shadow-sm">
-        <div className="space-y-3">
+      <Card key={transfer.id} className="ml-4 mb-2 p-2 bg-gradient-to-r from-gray-50 to-white border-l-2 border-blue-400 shadow-sm">
+        <div className="space-y-1.5">
           {/* Header con ID y Estado */}
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2">
-              <Hash size={14} className="text-gray-400" />
-              <span className="text-sm font-mono text-gray-600 font-semibold">Transferencia #{transfer.id}</span>
+          <div className="flex items-center justify-between flex-wrap gap-1.5">
+            <div className="flex items-center gap-1.5">
+              <Hash size={12} className="text-gray-400" />
+              <span className="text-xs font-mono text-gray-600 font-semibold">Transferencia #{transfer.id}</span>
             </div>
-            <span className={`text-xs px-3 py-1 rounded-full font-semibold border ${statusBadge.className}`}>
+            <span className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${statusBadge.className}`}>
               {statusBadge.icon} {statusBadge.text}
             </span>
           </div>
 
           {/* Texto descriptivo */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <p className="text-sm text-gray-800 font-medium leading-relaxed">
+          <div className="bg-blue-50 border border-blue-200 rounded p-1.5">
+            <p className="text-xs text-gray-800 font-medium leading-relaxed">
               {descriptiveText}
             </p>
           </div>
 
           {/* Información de envío */}
-          <div className="flex items-start gap-3 p-3 bg-red-50 rounded-lg border border-red-100">
-            <ArrowUpRight size={16} className="text-red-600 mt-0.5 flex-shrink-0" />
+          <div className="flex items-start gap-2 p-1.5 bg-red-50 rounded border border-red-100">
+            <ArrowUpRight size={12} className="text-red-600 mt-0.5 flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-red-700 mb-1">Remitente (Envía)</p>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-mono text-sm text-gray-800">{formatAddress(transfer.from)}</span>
+              <p className="text-xs font-semibold text-red-700 mb-0.5">Remitente</p>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-mono text-xs text-gray-800">{formatAddress(transfer.from)}</span>
                 {getRoleBadge(transfer.from)}
               </div>
             </div>
           </div>
 
           {/* Flecha de transferencia */}
-          <div className="flex items-center justify-center py-2">
-            <ArrowRight size={24} className="text-blue-500" />
-            <span className="mx-4 text-xl font-bold text-blue-600">{transfer.amount.toLocaleString()}</span>
-            <span className="text-sm text-gray-600 font-medium">unidades</span>
+          <div className="flex items-center justify-center py-1">
+            <ArrowRight size={16} className="text-blue-500" />
+            <span className="mx-2 text-base font-bold text-blue-600">{transfer.amount.toLocaleString()}</span>
+            <span className="text-xs text-gray-600 font-medium">unidades</span>
           </div>
 
           {/* Información de recepción */}
-          <div className="flex items-start gap-3 p-3 bg-green-50 rounded-lg border border-green-100">
-            <ArrowDownRight size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
+          <div className="flex items-start gap-2 p-1.5 bg-green-50 rounded border border-green-100">
+            <ArrowDownRight size={12} className="text-green-600 mt-0.5 flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-green-700 mb-1">Destinatario (Recibe)</p>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-mono text-sm text-gray-800">{formatAddress(transfer.to)}</span>
+              <p className="text-xs font-semibold text-green-700 mb-0.5">Destinatario</p>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-mono text-xs text-gray-800">{formatAddress(transfer.to)}</span>
                 {getRoleBadge(transfer.to)}
               </div>
             </div>
           </div>
 
           {/* Fecha */}
-          <div className="flex items-center gap-2 pt-2 border-t border-gray-200">
-            <Calendar size={14} className="text-gray-400" />
+          <div className="flex items-center gap-1.5 pt-1 border-t border-gray-200">
+            <Calendar size={12} className="text-gray-400" />
             <span className="text-xs text-gray-600">{formatDate(transfer.dateCreated)}</span>
           </div>
         </div>
@@ -375,54 +417,63 @@ export default function TokenTraceabilityTree({ tokenId }: TokenTraceabilityTree
     const hasTransfers = node.transfers.length > 0;
     const hasParent = node.parent !== undefined;
     const hasContent = hasChildren || hasTransfers || hasParent;
-    const creatorRole = userRoles.get(node.token.creator.toLowerCase());
-    const creatorConfig = creatorRole ? ROLE_CONFIG[creatorRole.role] : null;
-    const CreatorIcon = creatorConfig?.icon || Leaf;
-    
-    // Si es token raíz y no tenemos el rol todavía, intentar obtenerlo
     const isRootToken = node.token.parentId === 0;
+    
+    // Obtener rol del creador - si es token raíz y no tenemos el rol, asumir Producer
+    let creatorRole = userRoles.get(node.token.creator.toLowerCase());
+    if (isRootToken && (!creatorRole || creatorRole.role === 'UNKNOWN')) {
+      // Si es token raíz y no tenemos el rol, asumir que es Producer
+      creatorRole = { role: 'PRODUCER', address: node.token.creator };
+      // Actualizar el mapa para evitar futuras consultas
+      if (!userRoles.has(node.token.creator.toLowerCase())) {
+        setUserRoles(prev => new Map(prev).set(node.token.creator.toLowerCase(), creatorRole!));
+      }
+    }
+    
+    const creatorConfig = creatorRole && creatorRole.role !== 'UNKNOWN' ? ROLE_CONFIG[creatorRole.role] : null;
+    const CreatorIcon = creatorConfig?.icon || Leaf;
 
     return (
-      <div key={node.token.id} className="mb-4">
+      <div key={node.token.id} className="mb-2">
         {/* Token Card */}
-        <div className={`relative ${level > 0 ? 'ml-8' : ''}`}>
+        <div className={`relative ${level > 0 ? 'ml-4' : ''}`}>
           {/* Línea conectora vertical si no es raíz */}
           {!isRoot && level > 0 && (
             <div className="absolute left-0 top-0 w-0.5 h-4 bg-gray-300 -translate-x-2"></div>
           )}
           
-          <Card className={`p-5 ${isRoot ? 'border-2 border-blue-500 bg-gradient-to-br from-blue-50 to-white shadow-lg' : 'shadow-md'}`}>
+          <Card className={`p-2.5 ${isRoot ? 'border-2 border-blue-500 bg-gradient-to-br from-blue-50 to-white shadow-lg' : 'shadow-md'}`}>
             <div className="flex items-start justify-between">
               <div className="flex-1">
-                <div className="flex items-center gap-3 mb-3">
+                <div className="flex items-center gap-2 mb-1.5">
                   {hasContent && (
                     <button
                       onClick={() => toggleNode(node.token.id)}
-                      className="p-1.5 hover:bg-gray-200 rounded transition-colors"
+                      className="p-1 hover:bg-gray-200 rounded transition-colors"
                     >
                       {isExpanded ? (
-                        <ChevronDown size={18} className="text-gray-600" />
+                        <ChevronDown size={14} className="text-gray-600" />
                       ) : (
-                        <ChevronRight size={18} className="text-gray-600" />
+                        <ChevronRight size={14} className="text-gray-600" />
                       )}
                     </button>
                   )}
-                  <div className={`p-2 rounded-lg ${creatorConfig?.bgColor || 'bg-gray-100'}`}>
-                    <CreatorIcon size={24} className={creatorConfig?.color || 'text-gray-600'} />
+                  <div className={`p-1 rounded ${creatorConfig?.bgColor || 'bg-gray-100'}`}>
+                    <CreatorIcon size={16} className={creatorConfig?.color || 'text-gray-600'} />
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-bold text-xl text-gray-800 mb-1">{node.token.name}</h3>
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-bold text-base text-gray-800 mb-0.5">{node.token.name}</h3>
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <p className="text-xs text-gray-500 font-mono">ID: {node.token.id}</p>
                       {node.token.parentId === 0 && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700 border border-green-300">
-                          <Leaf size={12} />
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700 border border-green-300">
+                          <Leaf size={10} />
                           Token Raíz{creatorConfig ? ` (${creatorConfig.label})` : creatorRole ? ` (${ROLE_CONFIG[creatorRole.role]?.label || creatorRole.role})` : ''}
                         </span>
                       )}
                       {node.token.parentId !== 0 && creatorConfig && (
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${creatorConfig.bgColor} ${creatorConfig.color} border`}>
-                          <CreatorIcon size={12} />
+                        <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-semibold ${creatorConfig.bgColor} ${creatorConfig.color} border`}>
+                          <CreatorIcon size={10} />
                           {creatorConfig.label}
                         </span>
                       )}
@@ -430,19 +481,19 @@ export default function TokenTraceabilityTree({ tokenId }: TokenTraceabilityTree
                   </div>
                 </div>
                 
-                <div className="ml-12 space-y-2 text-sm">
-                  <div className="flex items-center gap-2">
+                <div className="ml-8 space-y-1 text-xs">
+                  <div className="flex items-center gap-1.5">
                     <span className="text-gray-600 font-medium">Creador:</span>
-                    <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">{formatAddress(node.token.creator)}</span>
-                    {getRoleBadge(node.token.creator)}
+                    <span className="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded">{formatAddress(node.token.creator)}</span>
+                    {getRoleBadge(node.token.creator, true, isRootToken)}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-600 font-medium">Suministro total:</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-gray-600 font-medium">Suministro:</span>
                     <span className="font-semibold text-blue-600">{node.token.totalSupply.toLocaleString()} unidades</span>
                   </div>
                   {node.parent && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-600 font-medium">Token padre:</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-gray-600 font-medium">Padre:</span>
                       <span className="text-blue-600 font-semibold">{node.parent.token.name}</span>
                       <span className="text-xs text-gray-500">(ID: {node.parent.token.id})</span>
                     </div>
@@ -455,13 +506,13 @@ export default function TokenTraceabilityTree({ tokenId }: TokenTraceabilityTree
 
         {/* Contenido expandible: Token padre, Transferencias y Tokens hijos */}
         {isExpanded && hasContent && (
-          <div className="mt-4 ml-8">
+          <div className="mt-2 ml-4">
             {/* Token padre (mostrar arriba para mostrar la cadena completa de trazabilidad) */}
             {hasParent && node.parent && (
-              <div className="mb-6">
-                <div className="mb-4 flex items-center gap-3 p-3 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg border border-amber-200">
-                  <ArrowUpRight size={20} className="text-amber-600" />
-                  <h4 className="font-bold text-base text-gray-800">
+              <div className="mb-3">
+                <div className="mb-2 flex items-center gap-2 p-1.5 bg-gradient-to-r from-amber-50 to-orange-50 rounded border border-amber-200">
+                  <ArrowUpRight size={14} className="text-amber-600" />
+                  <h4 className="font-bold text-sm text-gray-800">
                     Token Padre (Origen)
                   </h4>
                 </div>
@@ -478,17 +529,17 @@ export default function TokenTraceabilityTree({ tokenId }: TokenTraceabilityTree
 
             {/* Transferencias */}
             {hasTransfers && (
-              <div className="mb-6">
-                <div className="mb-4 flex items-center gap-3 p-3 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
-                  <Users size={20} className="text-blue-600" />
-                  <h4 className="font-bold text-base text-gray-800">
+              <div className="mb-3">
+                <div className="mb-2 flex items-center gap-2 p-1.5 bg-gradient-to-r from-blue-50 to-purple-50 rounded border border-blue-200">
+                  <Users size={14} className="text-blue-600" />
+                  <h4 className="font-bold text-sm text-gray-800">
                     Transferencias ({node.transfers.length})
                   </h4>
                 </div>
                 <div className="space-y-2">
                   {[...node.transfers]
                     .sort((a, b) => b.dateCreated - a.dateCreated) // Ordenar por fecha descendente (más recientes primero)
-                    .map(transfer => renderTransfer(transfer, node.token.name, node.token.totalSupply))}
+                    .map(transfer => renderTransfer(transfer, node.token.name, node.token.totalSupply, node.token.creator, isRootToken))}
                 </div>
               </div>
             )}
@@ -496,9 +547,9 @@ export default function TokenTraceabilityTree({ tokenId }: TokenTraceabilityTree
             {/* Tokens hijos */}
             {hasChildren && (
               <div>
-                <div className="mb-4 flex items-center gap-3 p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
-                  <ArrowDown size={20} className="text-green-600" />
-                  <h4 className="font-bold text-base text-gray-800">
+                <div className="mb-2 flex items-center gap-2 p-1.5 bg-gradient-to-r from-green-50 to-emerald-50 rounded border border-green-200">
+                  <ArrowDown size={14} className="text-green-600" />
+                  <h4 className="font-bold text-sm text-gray-800">
                     Tokens Derivados ({node.children.length})
                   </h4>
                 </div>
@@ -548,9 +599,9 @@ export default function TokenTraceabilityTree({ tokenId }: TokenTraceabilityTree
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">Árbol de Trazabilidad</h2>
+        <h2 className="text-lg font-semibold">Árbol de Trazabilidad</h2>
         <Button
           variant="secondary"
           size="sm"

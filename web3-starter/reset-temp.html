@@ -1,0 +1,109 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Reseteando conexión...</title>
+    <style>
+        body { 
+            font-family: Arial; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            background: #1a1a2e;
+            color: #eee;
+            margin: 0;
+        }
+        .container {
+            text-align: center;
+            padding: 40px;
+            background: #16213e;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>🔄 Reseteando aplicación...</h2>
+        <div class="spinner"></div>
+        <p>Limpiando caché y permisos de MetaMask</p>
+        <p style="font-size: 12px; color: #888;">Esta ventana se cerrará automáticamente</p>
+    </div>
+    <script>
+        async function resetAll() {
+            try {
+                // PRIMERO: Limpiar todo el almacenamiento local del navegador
+                // Esto incluye localStorage y sessionStorage
+                localStorage.clear();
+                sessionStorage.clear();
+                
+                // SEGUNDO: Revocar permisos de MetaMask si está disponible
+                // Esto desconecta todas las cuentas conectadas
+                if (window.ethereum) {
+                    try {
+                        // Intentar revocar permisos (método moderno)
+                        await window.ethereum.request({
+                            method: "wallet_revokePermissions",
+                            params: [{ eth_accounts: {} }]
+                        });
+                        console.log('✅ Permisos de MetaMask revocados');
+                    } catch (e) {
+                        // Si revokePermissions no está disponible, intentar desconectar manualmente
+                        console.log('⚠️ wallet_revokePermissions no disponible, intentando desconexión manual');
+                        try {
+                            // Intentar desconectar usando el método de desconexión
+                            if (window.ethereum.disconnect) {
+                                await window.ethereum.disconnect();
+                            }
+                            // También intentar eliminar las cuentas del estado
+                            await window.ethereum.request({
+                                method: "eth_requestAccounts",
+                                params: []
+                            });
+                        } catch (e2) {
+                            console.log('⚠️ No se pudo desconectar MetaMask automáticamente');
+                        }
+                    }
+                    
+                    // Forzar un evento de cambio de cuentas vacías para notificar a la app
+                    // Esto asegura que cualquier listener sepa que no hay cuentas conectadas
+                    setTimeout(() => {
+                        if (window.ethereum && window.ethereum._metamask) {
+                            window.ethereum._metamask.isUnlocked().then((unlocked) => {
+                                if (!unlocked) {
+                                    // Si MetaMask está bloqueado, disparar evento de cuentas vacías
+                                    window.dispatchEvent(new Event('ethereum#initialized'));
+                                }
+                            });
+                        }
+                    }, 500);
+                }
+                
+                // Cerrar ventana después de 2.5 segundos (dar tiempo a que MetaMask procese)
+                setTimeout(() => {
+                    window.close();
+                }, 2500);
+            } catch (error) {
+                console.error('Error reseteando:', error);
+                setTimeout(() => window.close(), 2500);
+            }
+        }
+        
+        // Ejecutar al cargar la página
+        resetAll();
+    </script>
+</body>
+</html>

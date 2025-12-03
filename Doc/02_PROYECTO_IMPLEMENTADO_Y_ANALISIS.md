@@ -112,8 +112,7 @@ Confieso que implementar la lógica de roles y permisos en el frontend fue uno d
 ```
 | Rol          | ID | Descripción               | Permisos                                                 |
 |--------------|----|---------------------------|----------------------------------------------------------|
-| **Admin**    | 0  | Administrador del sistema | Control total: aprobar/rechazar usuarios, cambiar roles, |
-                      gestionar permisos                                                                   |
+| **Admin**    | 0  | Administrador del sistema | Control total: aprobar/rechazar usuarios, cambiar roles gestionar permisos |                                                                  
 | **Producer** | 1  | Productor de materias primas | Crear y gestionar productos iniciales en la cadena    |
 | **Factory**  | 2  | Procesador/Fabricante | Transformar materias primas en productos                     |
 | **Retailer** | 3  | Distribuidor/Minorista | Distribución y venta de productos                           |
@@ -126,6 +125,22 @@ Confieso que implementar la lógica de roles y permisos en el frontend fue uno d
 - ❌ Rol Admin NO puede ser solicitado por usuarios (solo asignado por contrato)
 - ✅ Solo existe UN admin por contrato (Account #0 de Anvil en desarrollo)
 ```
+
+### 1.3 Matriz de Permisos por Rol
+```
+Tabla de referencia rápida de qué puede hacer cada rol:
+
+| Acción                        | Admin  | Producer       | Factory           | Retailer        | Consumer         |
+|-------------------------------|--------|----------------|-------------------|-----------------|-------------------|
+| **Crear tokens raíz**         | ❌    | ✅             | ❌               | ❌              | ❌               |
+| **Crear tokens derivados**    | ❌    | ❌             | ✅               | ❌              | ❌               |
+| **Transferir tokens**         | ❌    | ✅ (a Factory) | ✅ (a Retailer)  | ✅ (a Consumer) | ❌               |
+| **Recibir tokens**            | ❌    | ❌             | ✅ (de Producer) | ✅ (de Factory) | ✅ (de Retailer) |
+| **Consultar trazabilidad**    | ✅    | ✅             | ✅               | ✅              | ✅               |
+| **Aprobar/Rechazar usuarios** | ✅    | ❌             | ❌               | ❌              | ❌               |
+```
+**⚠️ Restricciones Clave**: Producer (solo raíz) • Factory (solo derivados con balance) • Retailer (NO crea, solo distribuye) • Consumer (punto final) • Admin (gestiona, no participa)
+
 ### 2.5 Máquina de Estados de Usuario
 ```
 ┌──────────┐
@@ -232,6 +247,16 @@ Esto pasó varias veces:
 
 📌 Ejemplo típico:
 > “Veo ETH pero balance es 0, no entiendo por qué”.
+Se solucionó reseteando MetaMask y volviendo a importar las cuentas.
+
+await window.ethereum.request({
+  method: "wallet_revokePermissions",
+  params: [{ eth_accounts: {} }]
+});
+localStorage.clear();
+sessionStorage.clear();
+location.reload();
+
 ```
 
 ## 2.9 Testing y Validación
@@ -333,6 +358,11 @@ Consulta el archivo **[04_CASOS_DE_USO.md](./04_CASOS_DE_USO.md)** para ver los 
 🔄 **Límite de rechazos**
 - Bloquear wallets con >N rechazos
 - Lista negra automática
+
+🔄 **Adaptar el ejercicio a la logica de un programa real**
+- Perimitir que la factory pueda crear un producto (token) de mas de un token.
+- Agregar un variable adicional al struct del token para que se pueda tener trazabilidad del token recibido y 
+  cuantos token se puede crear a partir de ese token que no sea una relacion 1:1. 
 ```
 
 ## 2.11 Documentación Disponible

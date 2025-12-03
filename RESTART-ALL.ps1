@@ -102,7 +102,7 @@ taskkill /F /IM node.exe 2>$null | Out-Null
 taskkill /F /IM anvil.exe 2>$null | Out-Null
 
 # Esperar para asegurar que los procesos terminen completamente
-Start-Sleep -Seconds 2
+Start-Sleep -Seconds 1
 
 Write-Host "[OK] Procesos detenidos" -ForegroundColor Green
 Write-Host ""
@@ -194,32 +194,60 @@ $resetHtml = @"
     <script>
         async function resetAll() {
             try {
-                // Revocar permisos de MetaMask si está disponible
-                // Esto desconecta todas las cuentas conectadas
-                if (window.ethereum) {
-                    try {
-                        await window.ethereum.request({
-                            method: "wallet_revokePermissions",
-                            params: [{ eth_accounts: {} }]
-                        });
-                    } catch (e) {
-                        // Ignorar si MetaMask no soporta revokePermissions
-                        // (versiones antiguas de MetaMask)
-                    }
-                }
-                
-                // Limpiar todo el almacenamiento local del navegador
+                // PRIMERO: Limpiar todo el almacenamiento local del navegador
                 // Esto incluye localStorage y sessionStorage
                 localStorage.clear();
                 sessionStorage.clear();
                 
-                // Cerrar ventana después de 2 segundos
+                // SEGUNDO: Revocar permisos de MetaMask si está disponible
+                // Esto desconecta todas las cuentas conectadas
+                if (window.ethereum) {
+                    try {
+                        // Intentar revocar permisos (método moderno)
+                        await window.ethereum.request({
+                            method: "wallet_revokePermissions",
+                            params: [{ eth_accounts: {} }]
+                        });
+                        console.log('✅ Permisos de MetaMask revocados');
+                    } catch (e) {
+                        // Si revokePermissions no está disponible, intentar desconectar manualmente
+                        console.log('⚠️ wallet_revokePermissions no disponible, intentando desconexión manual');
+                        try {
+                            // Intentar desconectar usando el método de desconexión
+                            if (window.ethereum.disconnect) {
+                                await window.ethereum.disconnect();
+                            }
+                            // También intentar eliminar las cuentas del estado
+                            await window.ethereum.request({
+                                method: "eth_requestAccounts",
+                                params: []
+                            });
+                        } catch (e2) {
+                            console.log('⚠️ No se pudo desconectar MetaMask automáticamente');
+                        }
+                    }
+                    
+                    // Forzar un evento de cambio de cuentas vacías para notificar a la app
+                    // Esto asegura que cualquier listener sepa que no hay cuentas conectadas
+                    setTimeout(() => {
+                        if (window.ethereum && window.ethereum._metamask) {
+                            window.ethereum._metamask.isUnlocked().then((unlocked) => {
+                                if (!unlocked) {
+                                    // Si MetaMask está bloqueado, disparar evento de cuentas vacías
+                                    window.dispatchEvent(new Event('ethereum#initialized'));
+                                }
+                            });
+                        }
+                    }, 500);
+                }
+                
+                // Cerrar ventana después de 2.5 segundos (dar tiempo a que MetaMask procese)
                 setTimeout(() => {
                     window.close();
-                }, 2000);
+                }, 2500);
             } catch (error) {
                 console.error('Error reseteando:', error);
-                setTimeout(() => window.close(), 2000);
+                setTimeout(() => window.close(), 2500);
             }
         }
         
@@ -234,13 +262,20 @@ $resetHtml = @"
 $resetFile = "$FRONTEND_DIR\reset-temp.html"
 $resetHtml | Out-File -FilePath $resetFile -Encoding UTF8
 
-# Abrir en el navegador predeterminado para ejecutar el reset
+# Abrir en el navegador predeterminado para ejecutar el reset (asíncrono)
 # El navegador ejecutará el JavaScript que limpia todo
-Start-Process $resetFile
-Start-Sleep -Seconds 4  # Esperar a que el navegador ejecute el script
+# No esperamos aquí para no bloquear el script - se eliminará después automáticamente
+Start-Process $resetFile | Out-Null
 
-# Eliminar el archivo temporal después de usarlo
-Remove-Item -Path $resetFile -Force -ErrorAction SilentlyContinue
+# Eliminar el archivo temporal después de 2 segundos (en segundo plano)
+# Usamos un job simple para no bloquear
+Start-Job -ScriptBlock {
+    param($filePath)
+    Start-Sleep -Seconds 2
+    if (Test-Path $filePath) {
+        Remove-Item -Path $filePath -Force -ErrorAction SilentlyContinue
+    }
+} -ArgumentList $resetFile | Out-Null
 
 # Mensajes adicionales para el usuario
 Write-Host "   - IMPORTANTE: Cierra todas las pestañas de localhost:3000" -ForegroundColor Yellow
@@ -275,10 +310,29 @@ Write-Host "[3/7] Iniciando Anvil..." -ForegroundColor Yellow
 # -Command: Comando a ejecutar (muestra título y ejecuta anvil)
 Start-Process powershell -ArgumentList '-NoExit', '-Command', 'Write-Host "=== ANVIL BLOCKCHAIN ===" -ForegroundColor Cyan; anvil'
 
-# Esperar a que Anvil inicie completamente
-Start-Sleep -Seconds 3
+# Verificar que Anvil esté listo haciendo peticiones HTTP (más rápido que esperar fijo)
+$anvilReady = $false
+$maxAttempts = 10
+$attempt = 0
 
-Write-Host "[OK] Anvil iniciado" -ForegroundColor Green
+while (-not $anvilReady -and $attempt -lt $maxAttempts) {
+    Start-Sleep -Milliseconds 300
+    $attempt++
+    try {
+        $response = Invoke-WebRequest -Uri "$ANVIL_RPC_URL" -Method POST -Body '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' -ContentType "application/json" -TimeoutSec 1 -ErrorAction Stop
+        if ($response.StatusCode -eq 200) {
+            $anvilReady = $true
+        }
+    } catch {
+        # Anvil aún no está listo, continuar intentando
+    }
+}
+
+if ($anvilReady) {
+    Write-Host "[OK] Anvil iniciado" -ForegroundColor Green
+} else {
+    Write-Host "[OK] Anvil iniciando (puede tardar unos segundos más)..." -ForegroundColor Yellow
+}
 Write-Host "   - RPC URL: $ANVIL_RPC_URL" -ForegroundColor Gray
 Write-Host "   - Chain ID: 31337" -ForegroundColor Gray
 Write-Host ""
@@ -442,13 +496,31 @@ Write-Host "[7/7] Iniciando Next.js..." -ForegroundColor Yellow
 # -Command: Cambia al directorio y ejecuta npm run dev
 Start-Process powershell -ArgumentList '-NoExit', '-Command', "cd web3-starter; Write-Host '=== NEXT.JS FRONTEND ===' -ForegroundColor Cyan; npm run dev"
 
-# Esperar a que Next.js inicie
-Start-Sleep -Seconds 5
+# Verificar que Next.js esté iniciando (verificamos el puerto, no esperamos compilación completa)
+$nextjsStarted = $false
+$maxAttempts = 15
+$attempt = 0
 
-Write-Host "[OK] Next.js iniciado" -ForegroundColor Green
+while (-not $nextjsStarted -and $attempt -lt $maxAttempts) {
+    Start-Sleep -Milliseconds 400
+    $attempt++
+    try {
+        $response = Invoke-WebRequest -Uri "$FRONTEND_LOCAL_URL" -Method GET -TimeoutSec 1 -ErrorAction Stop -UseBasicParsing
+        $nextjsStarted = $true
+    } catch {
+        # Next.js aún no está listo, continuar intentando
+        # Puede ser que el servidor esté iniciando pero aún no responda
+    }
+}
+
+if ($nextjsStarted) {
+    Write-Host "[OK] Next.js iniciado y respondiendo" -ForegroundColor Green
+} else {
+    Write-Host "[OK] Next.js iniciando (compilando en segundo plano)..." -ForegroundColor Yellow
+}
 Write-Host "   - URL Local: $FRONTEND_LOCAL_URL" -ForegroundColor Gray
 Write-Host "   - URL Red: $FRONTEND_URL" -ForegroundColor Gray
-Write-Host "   - Nota: Puede tardar unos segundos más en compilar" -ForegroundColor Gray
+Write-Host "   - Nota: La compilación completa puede tardar unos segundos más" -ForegroundColor Gray
 Write-Host ""
 
 # ============================================================================
@@ -470,7 +542,7 @@ Write-Host "  - ABI: Actualizado automáticamente desde backend/out" -Foreground
 Write-Host ""
 
 Write-Host "PRÓXIMOS PASOS:" -ForegroundColor Yellow
-Write-Host "  1. Espera 10 segundos más a que Next.js compile completamente" -ForegroundColor White
+Write-Host "  1. Espera 5-10 segundos más a que Next.js compile completamente" -ForegroundColor White
 Write-Host "  2. Abre Chrome en MODO INCÓGNITO (Ctrl+Shift+N)" -ForegroundColor White
 Write-Host "     - El modo incógnito evita problemas de caché" -ForegroundColor Gray
 Write-Host "  3. Ve a: $FRONTEND_URL" -ForegroundColor White
